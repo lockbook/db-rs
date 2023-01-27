@@ -1,14 +1,13 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+mod logger;
+mod lookup;
+mod serializer;
+mod single;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use std::collections::HashMap;
+use std::marker::PhantomData;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub trait Db {}
+
+pub struct SampleSchemaV1 {}
+
+impl Db for SampleSchemaV1 {}
