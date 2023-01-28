@@ -10,7 +10,7 @@ where
 {
     table_id: TableId,
     inner: Option<V>,
-    logger: Logger,
+    pub logger: Logger,
     c: PhantomData<C>,
 }
 
