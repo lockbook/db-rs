@@ -1,21 +1,47 @@
 use crate::logger::Logger;
 use crate::serializer::Codec;
+use crate::table::Table;
+use crate::TableId;
 use std::marker::PhantomData;
 
-pub struct Single<V, C, L>
+pub struct Single<V, C>
 where
     C: Codec<Option<V>>,
-    L: Logger,
 {
+    table_id: TableId,
     inner: Option<V>,
-    logger: L,
+    logger: Logger,
     c: PhantomData<C>,
 }
 
-impl<V, C, L> Single<V, C, L>
+impl<V, C> Table for Single<V, C>
 where
     C: Codec<Option<V>>,
-    L: Logger,
+{
+    fn init(table_id: TableId, logger: Logger) -> Self {
+        Self {
+            table_id,
+            inner: None,
+            logger,
+            c: Default::default(),
+        }
+    }
+
+    fn handle_event(&mut self, bytes: &[u8]) {
+        match C::deserialize(bytes) {
+            Some(v) => {
+                self.insert(v);
+            }
+            None => {
+                self.clear();
+            }
+        };
+    }
+}
+
+impl<V, C> Single<V, C>
+where
+    C: Codec<Option<V>>,
 {
     pub fn insert(&mut self, value: V) -> Option<V> {
         let log_entry = Some(value);
@@ -27,7 +53,7 @@ where
             None
         };
 
-        self.logger.write(&data);
+        self.logger.write(self.table_id, &data);
 
         ret
     }
@@ -40,7 +66,7 @@ where
         let log_entry = None;
         let data = C::serialize(&log_entry);
         let ret = self.inner.take();
-        self.logger.write(&data);
+        self.logger.write(self.table_id, &data);
         ret
     }
 }

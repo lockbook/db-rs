@@ -1,25 +1,33 @@
+use crate::config::Config;
+use crate::TableId;
 use std::cell::RefCell;
 use std::fs::File;
 use std::rc::Rc;
 
-pub trait Logger {
-    fn write(&mut self, data: &[u8]);
+pub struct LogFormat<'a> {
+    pub table_id: TableId,
+    pub bytes: &'a [u8],
 }
 
-pub struct Disk {
+#[derive(Clone)]
+pub struct Logger {
     file: Rc<RefCell<File>>,
 }
 
-impl Logger for Disk {
-    fn write(&mut self, data: &[u8]) {
+impl Logger {
+    pub fn init(c: Config) -> Self {
         todo!()
     }
-}
-
-pub struct BlackHole {}
-
-impl Logger for BlackHole {
-    fn write(&mut self, data: &[u8]) {
+    pub fn get_entries(&self) -> Vec<LogFormat> {
+        todo!()
+    }
+    pub fn begin_tx(&self) {
+        todo!()
+    }
+    pub fn end_tx(&self) {
+        todo!()
+    }
+    pub fn write(&self, id: TableId, data: &[u8]) {
         todo!()
     }
 }
