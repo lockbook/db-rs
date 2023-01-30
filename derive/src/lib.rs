@@ -1,4 +1,3 @@
-use db_rs::TableId;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
@@ -41,11 +40,14 @@ pub fn db(input: TokenStream) -> TokenStream {
         use db_rs::logger::Logger;
         use db_rs::Db;
         use db_rs::table::Table;
+        use db_rs::DbResult;
 
         impl Db for #ident {
-            fn init(config: Config) -> Self {
-                let log = Logger::init(config);
-                let log_entries = log.get_entries();
+            fn init(mut config: Config) -> DbResult<Self> {
+                let schema_name = stringify!(#ident);
+                config.schema_name = Some(schema_name.to_string());
+                let log = Logger::init(config)?;
+                let log_entries = log.get_entries(log.get_bytes()?);
 
                 #( let mut #idents = <#types>::init(#ids, log.clone()); )*
 
@@ -56,9 +58,11 @@ pub fn db(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                Self {
-                    #( #idents, )*
-                }
+                Ok(
+                    Self {
+                        #( #idents, )*
+                    }
+                )
             }
 
             fn get_logger(&mut self) -> &mut Logger {

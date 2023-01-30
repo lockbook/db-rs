@@ -11,5 +11,5 @@ struct SampleSchemaV1 {
 }
 
 fn main() {
-    let a = SampleSchemaV1::init(Config::default());
+    let a = SampleSchemaV1::init(Config::in_folder("/tmp/test/"));
 }
