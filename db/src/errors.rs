@@ -4,8 +4,7 @@ pub type DbResult<T> = Result<T, DbError>;
 
 #[derive(Debug)]
 pub enum DbError {
-    // Unexpected Errors
-    MisConfig(&'static str),
+    Unexpected(&'static str),
     Io(io::Error),
     Bincode(bincode::Error),
 }

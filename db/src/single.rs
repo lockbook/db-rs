@@ -19,11 +19,7 @@ where
     V: Serialize + DeserializeOwned,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
-        Self {
-            table_id,
-            inner: None,
-            logger,
-        }
+        Self { table_id, inner: None, logger }
     }
 
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
@@ -48,11 +44,7 @@ where
         let log_entry = Some(value);
         let data = bincode::serialize(&log_entry)?;
 
-        let ret = if let Some(value) = log_entry {
-            self.inner.replace(value)
-        } else {
-            None
-        };
+        let ret = if let Some(value) = log_entry { self.inner.replace(value) } else { None };
 
         self.logger.write(self.table_id, &data);
 

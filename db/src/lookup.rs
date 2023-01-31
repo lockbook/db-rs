@@ -30,11 +30,7 @@ where
     V: Hash + Serialize + DeserializeOwned,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
-        Self {
-            table_id,
-            inner: HashMap::default(),
-            logger,
-        }
+        Self { table_id, inner: HashMap::default(), logger }
     }
 
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {

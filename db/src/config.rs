@@ -26,14 +26,11 @@ impl Config {
     where
         P: AsRef<Path>,
     {
-        Self {
-            path: PathBuf::from(p.as_ref()),
-            ..Self::base()
-        }
+        Self { path: PathBuf::from(p.as_ref()), ..Self::base() }
     }
 
     pub fn db_location(&self) -> DbResult<PathBuf> {
-        let name = self.schema_name.as_ref().ok_or(DbError::MisConfig(
+        let name = self.schema_name.as_ref().ok_or(DbError::Unexpected(
             "Schema name not populated! db-rs-derive should have done this",
         ))?;
         let mut pathbuf = self.path.clone();
