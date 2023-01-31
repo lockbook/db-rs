@@ -14,7 +14,7 @@ where
 {
     table_id: TableId,
     inner: HashMap<K, V>,
-    pub(crate) logger: Logger,
+    pub logger: Logger,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -36,7 +36,7 @@ where
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
         match bincode::deserialize(bytes)? {
             LogEntry::Insert(k, v) => {
-                self.insert(k, v)?;
+                self.inner.insert(k, v);
             }
             LogEntry::Remove(k) => {
                 self.inner.remove(&k);

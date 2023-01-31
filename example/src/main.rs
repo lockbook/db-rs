@@ -1,9 +1,10 @@
 use db_rs::config::Config;
 use db_rs::lookup::LookupTable;
 use db_rs::single::Single;
-use db_rs_derive::Db;
+use db_rs::Db;
+use db_rs_derive::Schema;
 
-#[derive(Db)]
+#[derive(Schema)]
 struct SampleSchemaV1 {
     pub names: LookupTable<String, String>,
     pub is_good: Single<bool>,

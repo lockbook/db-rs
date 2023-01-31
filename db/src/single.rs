@@ -25,10 +25,10 @@ where
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
         match bincode::deserialize(bytes)? {
             Some(v) => {
-                self.insert(v)?;
+                self.inner = Some(v);
             }
             None => {
-                self.clear()?;
+                self.inner = None;
             }
         };
 

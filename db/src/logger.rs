@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::errors::DbResult;
-use crate::TableId;
+use crate::{ByteCount, TableId};
 use std::cell::RefCell;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -28,13 +28,11 @@ struct LoggerInner {
 
 impl Logger {
     pub fn init(config: Config) -> DbResult<Self> {
-        let path = config.db_location()?;
-
         if config.create_path {
-            fs::create_dir_all(&path)?;
+            fs::create_dir_all(&config.path)?;
         }
 
-        let file = Self::open_file(&config, &path)?;
+        let file = Self::open_file(&config, &config.db_location()?)?;
 
         let incomplete_write = false;
         let tx_data = None;
@@ -63,7 +61,7 @@ impl Logger {
             let table_id = buffer[index];
             index += 1;
 
-            let size = u32::from_be_bytes(
+            let size = ByteCount::from_be_bytes(
                 buffer[index..index + 4]
                     .try_into()
                     .expect("slice with incorrect length"),
@@ -133,17 +131,17 @@ impl Logger {
 
     pub fn write_to_file(&self, id: TableId, data: Vec<u8>) -> DbResult<()> {
         let mut inner = self.inner.borrow_mut();
-        if inner.config.no_io {
+        if !inner.config.no_io {
             inner.file.write_all(&Self::log_entry(id, data))?;
         }
         Ok(())
     }
 
     pub fn log_entry(id: TableId, mut data: Vec<u8>) -> Vec<u8> {
-        // could be more efficient by unsafe prepending
+        // could be more efficient by unsafe prepending to data
         let mut data_to_write = Vec::with_capacity(data.len() + 5);
         data_to_write.push(id);
-        data_to_write.extend(data.len().to_be_bytes());
+        data_to_write.extend((data.len() as ByteCount).to_be_bytes());
         data_to_write.append(&mut data);
         data_to_write
     }

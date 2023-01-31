@@ -4,8 +4,8 @@ use quote::quote;
 use syn::parse_macro_input;
 use syn::*;
 
-#[proc_macro_derive(Db)]
-pub fn db(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Schema)]
+pub fn schema(input: TokenStream) -> TokenStream {
     let DeriveInput { ident, data, .. } = parse_macro_input!(input);
 
     let tables = match data {
@@ -39,16 +39,14 @@ pub fn db(input: TokenStream) -> TokenStream {
     let ids: Vec<u8> = (1..(idents.len() + 1) as u8).into_iter().collect();
 
     let output = quote! {
-        use db_rs::logger::Logger;
-        use db_rs::Db;
-        use db_rs::table::Table;
-        use db_rs::errors::DbResult;
 
-        impl Db for #ident {
-            fn init(mut config: Config) -> DbResult<Self> {
+        impl db_rs::Db for #ident {
+            fn init(mut config: db_rs::Config) -> db_rs::DbResult<Self> {
+                use db_rs::table::Table;
+
                 let schema_name = stringify!(#ident);
                 config.schema_name = Some(schema_name.to_string());
-                let mut log = Logger::init(config)?;
+                let mut log = db_rs::Logger::init(config)?;
                 let log_data = log.get_bytes()?;
                 let log_entries = log.get_entries(&log_data)?;
 
@@ -68,14 +66,16 @@ pub fn db(input: TokenStream) -> TokenStream {
                 )
             }
 
-            fn compact_log(&mut self) -> DbResult<()> {
+            fn compact_log(&mut self) -> db_rs::DbResult<()> {
+                use db_rs::table::Table;
+
                 let mut data = vec![];
                 #( data.append(&mut self.#idents.compact_repr()?);)*
                 self.get_logger().compact_log(&data)?;
                 Ok(())
             }
 
-            fn get_logger(&self) -> &Logger {
+            fn get_logger(&self) -> &db_rs::Logger {
                 &self.#last.logger
             }
         }

@@ -2,12 +2,12 @@ use crate::errors::{DbError, DbResult};
 use std::path::{Path, PathBuf};
 
 pub struct Config {
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
     pub schema_name: Option<String>,
-    pub(crate) create_path: bool,
-    pub(crate) create_db: bool,
-    pub(crate) read_only: bool,
-    pub(crate) no_io: bool,
+    pub create_path: bool,
+    pub create_db: bool,
+    pub read_only: bool,
+    pub no_io: bool,
 }
 
 impl Config {
@@ -15,7 +15,7 @@ impl Config {
         Self {
             path: Default::default(),
             schema_name: None,
-            create_path: false,
+            create_path: true,
             create_db: true,
             read_only: false,
             no_io: false,
