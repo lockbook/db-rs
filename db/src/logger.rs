@@ -4,7 +4,7 @@ use crate::TableId;
 use std::cell::RefCell;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::rc::Rc;
 
 pub struct LogFormat<'a> {
@@ -107,11 +107,11 @@ impl Logger {
         h
     }
 
-    pub fn end_tx(&self) {
+    pub fn end_tx(&self) -> DbResult<()> {
         let mut inner = self.inner.borrow_mut();
         if inner.current_txs == 0 {
             eprintln!("called end_tx while no transaction active!");
-            return;
+            return Ok(());
         }
 
         inner.current_txs -= 0;
@@ -119,13 +119,39 @@ impl Logger {
             let data = inner.tx_data.take();
             drop(inner);
             if let Some(data) = data {
-                self.write(0, &data);
+                self.write_to_file(0, data)?;
             }
         }
+
+        Ok(())
     }
 
-    pub fn write(&self, id: TableId, data: &[u8]) {
-        todo!()
+    pub fn write(&self, id: TableId, data: Vec<u8>) -> DbResult<()> {
+        let mut inner = self.inner.borrow_mut();
+        if let Some(tx_data) = &mut inner.tx_data {
+            tx_data.append(&mut Self::log_entry(id, data));
+            return Ok(());
+        }
+        drop(inner);
+
+        self.write_to_file(id, data)
+    }
+
+    pub fn write_to_file(&self, id: TableId, data: Vec<u8>) -> DbResult<()> {
+        let mut inner = self.inner.borrow_mut();
+        if inner.config.no_io {
+            inner.file.write_all(&Self::log_entry(id, data))?;
+        }
+        Ok(())
+    }
+
+    fn log_entry(id: TableId, mut data: Vec<u8>) -> Vec<u8> {
+        // could be more efficient by unsafe prepending
+        let mut data_to_write = Vec::with_capacity(data.len() + 5);
+        data_to_write.push(id);
+        data_to_write.extend(data.len().to_be_bytes());
+        data_to_write.append(&mut data);
+        data_to_write
     }
 }
 
@@ -135,6 +161,8 @@ pub struct TxHandle {
 
 impl Drop for TxHandle {
     fn drop(&mut self) {
-        self.inner.end_tx();
+        self.inner
+            .end_tx()
+            .expect("Failed to end a transaction, use tx() for a non panicking variant");
     }
 }

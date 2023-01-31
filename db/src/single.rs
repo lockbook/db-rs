@@ -46,7 +46,7 @@ where
 
         let ret = if let Some(value) = log_entry { self.inner.replace(value) } else { None };
 
-        self.logger.write(self.table_id, &data);
+        self.logger.write(self.table_id, data)?;
 
         Ok(ret)
     }
@@ -59,7 +59,7 @@ where
         let log_entry = Option::<V>::None;
         let data = bincode::serialize(&log_entry)?;
         let ret = self.inner.take();
-        self.logger.write(self.table_id, &data);
+        self.logger.write(self.table_id, data)?;
         Ok(ret)
     }
 }

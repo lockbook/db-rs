@@ -38,8 +38,12 @@ where
             LogEntry::Insert(k, v) => {
                 self.insert(k, v)?;
             }
-            LogEntry::Remove(k) => todo!(),
-            LogEntry::Clear => self.clear()?,
+            LogEntry::Remove(k) => {
+                self.inner.remove(&k);
+            }
+            LogEntry::Clear => {
+                self.inner.clear();
+            }
         };
 
         Ok(())
@@ -61,7 +65,7 @@ where
             None
         };
 
-        self.logger.write(self.table_id, &data);
+        self.logger.write(self.table_id, data)?;
         Ok(ret)
     }
 
@@ -73,7 +77,7 @@ where
         self.inner.clear();
         let log_entry = LogEntry::<K, V>::Clear;
         let data = bincode::serialize(&log_entry)?;
-        self.logger.write(self.table_id, &data);
+        self.logger.write(self.table_id, data)?;
 
         Ok(())
     }
