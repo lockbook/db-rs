@@ -37,4 +37,13 @@ impl Config {
         pathbuf.push(name);
         Ok(pathbuf)
     }
+
+    pub fn compaction_location(&self) -> DbResult<PathBuf> {
+        let name = self.schema_name.as_ref().ok_or(DbError::Unexpected(
+            "Schema name not populated! db-rs-derive should have done this",
+        ))?;
+        let mut pathbuf = self.path.clone();
+        pathbuf.push(format!("{name}.tmp"));
+        Ok(pathbuf)
+    }
 }

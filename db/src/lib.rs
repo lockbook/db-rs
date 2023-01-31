@@ -11,6 +11,7 @@ pub mod table;
 
 pub trait Db: Sized {
     fn init(location: Config) -> DbResult<Self>;
+    fn compact_log(&mut self) -> DbResult<()>;
     fn get_logger(&mut self) -> &mut Logger;
     fn begin_transaction(&mut self) {
         self.get_logger().begin_tx();

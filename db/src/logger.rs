@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct LogFormat<'a> {
@@ -33,13 +34,7 @@ impl Logger {
             fs::create_dir_all(&path)?;
         }
 
-        let can_write = !config.read_only;
-
-        let file = OpenOptions::new()
-            .read(true)
-            .create(config.create_db)
-            .append(can_write)
-            .open(&path)?;
+        let file = Self::open_file(&config, &path)?;
 
         let incomplete_write = false;
         let tx_data = None;
@@ -145,13 +140,39 @@ impl Logger {
         Ok(())
     }
 
-    fn log_entry(id: TableId, mut data: Vec<u8>) -> Vec<u8> {
+    pub fn log_entry(id: TableId, mut data: Vec<u8>) -> Vec<u8> {
         // could be more efficient by unsafe prepending
         let mut data_to_write = Vec::with_capacity(data.len() + 5);
         data_to_write.push(id);
         data_to_write.extend(data.len().to_be_bytes());
         data_to_write.append(&mut data);
         data_to_write
+    }
+
+    pub fn compact_log(&self, data: &[u8]) -> DbResult<()> {
+        let mut inner = self.inner.borrow_mut();
+        if inner.config.no_io {
+            return Ok(());
+        }
+
+        let temp_path = inner.config.compaction_location()?;
+        let final_path = inner.config.db_location()?;
+
+        let mut file = Self::open_file(&inner.config, &temp_path)?;
+        file.write_all(data)?;
+
+        fs::rename(temp_path, final_path)?;
+        inner.file = file;
+
+        Ok(())
+    }
+
+    fn open_file(config: &Config, db_location: &Path) -> DbResult<File> {
+        Ok(OpenOptions::new()
+            .read(true)
+            .create(config.create_db)
+            .append(!config.read_only)
+            .open(db_location)?)
     }
 }
 

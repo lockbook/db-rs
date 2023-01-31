@@ -34,6 +34,16 @@ where
 
         Ok(())
     }
+
+    fn compact_repr(&self) -> DbResult<Vec<u8>> {
+        if let Some(v) = &self.inner {
+            let data = bincode::serialize(&Some(v))?;
+            let data = Logger::log_entry(self.table_id, data);
+            Ok(data)
+        } else {
+            Ok(vec![])
+        }
+    }
 }
 
 impl<V> Single<V>

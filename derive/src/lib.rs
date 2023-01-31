@@ -68,6 +68,13 @@ pub fn db(input: TokenStream) -> TokenStream {
                 )
             }
 
+            fn compact_log(&mut self) -> DbResult<()> {
+                let mut data = vec![];
+                #( data.append(&mut self.#idents.compact_repr()?);)*
+                self.get_logger().compact_log(&data)?;
+                Ok(())
+            }
+
             fn get_logger(&mut self) -> &mut Logger {
                 &mut self.#last.logger
             }

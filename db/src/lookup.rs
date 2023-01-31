@@ -48,6 +48,17 @@ where
 
         Ok(())
     }
+
+    fn compact_repr(&self) -> DbResult<Vec<u8>> {
+        let mut repr = vec![];
+        for (k, v) in &self.inner {
+            let data = bincode::serialize(&LogEntry::Insert(k, v))?;
+            let mut data = Logger::log_entry(self.table_id, data);
+            repr.append(&mut data);
+        }
+
+        Ok(repr)
+    }
 }
 
 impl<K, V> LookupTable<K, V>
