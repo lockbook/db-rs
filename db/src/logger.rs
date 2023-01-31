@@ -1,5 +1,6 @@
 use crate::config::Config;
-use crate::{DbResult, TableId};
+use crate::errors::DbResult;
+use crate::TableId;
 use std::cell::RefCell;
 use std::fs;
 use std::fs::{File, OpenOptions};

@@ -1,16 +1,13 @@
 use crate::config::Config;
-use crate::errors::DbError;
+use crate::errors::DbResult;
 use crate::logger::Logger;
 
 pub mod config;
 pub mod errors;
 pub mod logger;
 pub mod lookup;
-pub mod serializer;
 pub mod single;
 pub mod table;
-
-pub type DbResult<T> = Result<T, DbError>;
 
 pub trait Db: Sized {
     fn init(location: Config) -> DbResult<Self>;

@@ -1,5 +1,4 @@
-use crate::errors::DbError;
-use crate::DbResult;
+use crate::errors::{DbError, DbResult};
 use std::path::{Path, PathBuf};
 
 pub struct Config {
@@ -34,9 +33,9 @@ impl Config {
     }
 
     pub fn db_location(&self) -> DbResult<PathBuf> {
-        let name = self.schema_name.as_ref().ok_or_else(|| {
-            DbError::MisConfig("Schema name not populated! db-rs-derive should have done this")
-        })?;
+        let name = self.schema_name.as_ref().ok_or(DbError::MisConfig(
+            "Schema name not populated! db-rs-derive should have done this",
+        ))?;
         let mut pathbuf = self.path.clone();
         pathbuf.push(name);
         Ok(pathbuf)

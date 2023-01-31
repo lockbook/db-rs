@@ -1,64 +1,63 @@
+use crate::errors::DbResult;
 use crate::logger::Logger;
-use crate::serializer::Codec;
 use crate::table::Table;
 use crate::TableId;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::marker::PhantomData;
 
-pub struct LookupTable<K, V, C>
+pub struct LookupTable<K, V>
 where
-    K: Hash + Eq,
-    V: Hash,
-    C: Codec<LogEntry<K, V>>,
+    K: Hash + Eq + Serialize,
+    V: Hash + Serialize,
 {
     table_id: TableId,
     inner: HashMap<K, V>,
     pub(crate) logger: Logger,
-    c: PhantomData<C>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum LogEntry<K, V> {
     Insert(K, V),
     Remove(K),
     Clear,
 }
 
-impl<K, V, C> Table for LookupTable<K, V, C>
+impl<K, V> Table for LookupTable<K, V>
 where
-    K: Hash + Eq,
-    V: Hash,
-    C: Codec<LogEntry<K, V>>,
+    K: Hash + Eq + Serialize + DeserializeOwned,
+    V: Hash + Serialize + DeserializeOwned,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
         Self {
             table_id,
             inner: HashMap::default(),
             logger,
-            c: Default::default(),
         }
     }
 
-    fn handle_event(&mut self, bytes: &[u8]) {
-        match C::deserialize(bytes) {
+    fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
+        match bincode::deserialize(bytes)? {
             LogEntry::Insert(k, v) => {
-                self.insert(k, v);
+                self.insert(k, v)?;
             }
             LogEntry::Remove(k) => todo!(),
-            LogEntry::Clear => self.clear(),
+            LogEntry::Clear => self.clear()?,
         };
+
+        Ok(())
     }
 }
 
-impl<K, V, C> LookupTable<K, V, C>
+impl<K, V> LookupTable<K, V>
 where
-    K: Hash + Eq,
-    V: Hash,
-    C: Codec<LogEntry<K, V>>,
+    K: Hash + Eq + Serialize + DeserializeOwned,
+    V: Hash + Serialize + DeserializeOwned,
 {
-    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+    pub fn insert(&mut self, key: K, value: V) -> DbResult<Option<V>> {
         let log_entry = LogEntry::Insert(key, value);
-        let data = C::serialize(&log_entry);
+        let data = bincode::serialize(&log_entry)?;
 
         let ret = if let LogEntry::Insert(key, value) = log_entry {
             self.inner.insert(key, value)
@@ -67,17 +66,19 @@ where
         };
 
         self.logger.write(self.table_id, &data);
-        ret
+        Ok(ret)
     }
 
     pub fn get(&self, k: &K) -> Option<&V> {
         self.inner.get(k)
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) -> DbResult<()> {
         self.inner.clear();
-        let log_entry = LogEntry::Clear;
-        let data = C::serialize(&log_entry);
+        let log_entry = LogEntry::<K, V>::Clear;
+        let data = bincode::serialize(&log_entry)?;
         self.logger.write(self.table_id, &data);
+
+        Ok(())
     }
 }

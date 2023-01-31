@@ -22,6 +22,8 @@ pub fn db(input: TokenStream) -> TokenStream {
         _ => panic!("db schema must be a struct"),
     };
 
+    let types = tables.iter().map(|table| &table.ty);
+
     let idents: &Vec<&Ident> = &tables
         .iter()
         .map(|table| table.ident.as_ref().unwrap())
@@ -33,14 +35,13 @@ pub fn db(input: TokenStream) -> TokenStream {
         .last()
         .unwrap();
 
-    let types = tables.iter().map(|table| &table.ty);
     let ids: Vec<u8> = (0..idents.len() as u8).into_iter().collect();
 
     let output = quote! {
         use db_rs::logger::Logger;
         use db_rs::Db;
         use db_rs::table::Table;
-        use db_rs::DbResult;
+        use db_rs::errors::DbResult;
 
         impl Db for #ident {
             fn init(mut config: Config) -> DbResult<Self> {
@@ -53,7 +54,7 @@ pub fn db(input: TokenStream) -> TokenStream {
 
                 for entry in log_entries {
                     match entry.table_id {
-                        #( #ids => #idents.handle_event(entry.bytes), )*
+                        #( #ids => #idents.handle_event(entry.bytes)?, )*
                         _ => todo!()
                     }
                 }
