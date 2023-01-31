@@ -75,8 +75,8 @@ pub fn db(input: TokenStream) -> TokenStream {
                 Ok(())
             }
 
-            fn get_logger(&mut self) -> &mut Logger {
-                &mut self.#last.logger
+            fn get_logger(&self) -> &Logger {
+                &self.#last.logger
             }
         }
     };

@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::errors::DbResult;
-use crate::logger::Logger;
+use crate::logger::{Logger, TxHandle};
 
 pub mod config;
 pub mod errors;
@@ -12,9 +12,9 @@ pub mod table;
 pub trait Db: Sized {
     fn init(location: Config) -> DbResult<Self>;
     fn compact_log(&mut self) -> DbResult<()>;
-    fn get_logger(&mut self) -> &mut Logger;
-    fn begin_transaction(&mut self) {
-        self.get_logger().begin_tx();
+    fn get_logger(&self) -> &Logger;
+    fn begin_transaction(&mut self) -> TxHandle {
+        self.get_logger().begin_tx()
     }
 }
 

@@ -105,7 +105,6 @@ impl Logger {
     pub fn end_tx(&self) -> DbResult<()> {
         let mut inner = self.inner.borrow_mut();
         if inner.current_txs == 0 {
-            eprintln!("called end_tx while no transaction active!");
             return Ok(());
         }
 
@@ -176,14 +175,21 @@ impl Logger {
     }
 }
 
+#[must_use = "DB stays in Tx mode while this value is in scope. Manually call drop_safely() to handle io errors that may arise when tx terminates."]
 pub struct TxHandle {
     inner: Logger,
+}
+
+impl TxHandle {
+    pub fn drop_safely(&self) -> DbResult<()> {
+        self.inner.end_tx()
+    }
 }
 
 impl Drop for TxHandle {
     fn drop(&mut self) {
         self.inner
             .end_tx()
-            .expect("Failed to end a transaction, use tx() for a non panicking variant");
+            .expect("auto tx-end panicked. Call drop_safely() for non-panicking variant.");
     }
 }
