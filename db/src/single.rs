@@ -51,10 +51,10 @@ where
     V: Serialize + DeserializeOwned,
 {
     pub fn insert(&mut self, value: V) -> DbResult<Option<V>> {
-        let log_entry = Some(value);
+        let log_entry = Some(&value);
         let data = bincode::serialize(&log_entry)?;
 
-        let ret = if let Some(value) = log_entry { self.inner.replace(value) } else { None };
+        let ret = self.inner.replace(value);
 
         self.logger.write(self.table_id, data)?;
 

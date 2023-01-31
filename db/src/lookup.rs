@@ -67,14 +67,10 @@ where
     V: Hash + Serialize + DeserializeOwned,
 {
     pub fn insert(&mut self, key: K, value: V) -> DbResult<Option<V>> {
-        let log_entry = LogEntry::Insert(key, value);
+        let log_entry = LogEntry::Insert(&key, &value);
         let data = bincode::serialize(&log_entry)?;
 
-        let ret = if let LogEntry::Insert(key, value) = log_entry {
-            self.inner.insert(key, value)
-        } else {
-            None
-        };
+        let ret = self.inner.insert(key, value);
 
         self.logger.write(self.table_id, data)?;
         Ok(ret)
