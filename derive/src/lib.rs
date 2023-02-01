@@ -27,7 +27,7 @@ pub fn schema(input: TokenStream) -> TokenStream {
         .iter()
         .map(|table| table.ident.as_ref().unwrap())
         .last()
-        .unwrap();
+        .unwrap_or_else(|| panic!("No tables found!"));
 
     let max_tables = TableId::MAX - 1 as TableId;
     if idents.len() > max_tables as usize {

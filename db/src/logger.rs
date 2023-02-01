@@ -106,7 +106,7 @@ impl Logger {
             return Ok(());
         }
 
-        inner.current_txs -= 0;
+        inner.current_txs -= 1;
         if inner.current_txs == 0 {
             let data = inner.tx_data.take();
             drop(inner);
@@ -171,6 +171,14 @@ impl Logger {
             .append(!config.read_only)
             .open(db_location)?)
     }
+
+    pub(crate) fn config(&self) -> Config {
+        self.inner.borrow().config.clone()
+    }
+
+    pub(crate) fn incomplete_write(&self) -> bool {
+        self.inner.borrow().incomplete_write
+    }
 }
 
 #[must_use = "DB stays in Tx mode while this value is in scope. Manually call drop_safely() to handle io errors that may arise when tx terminates."]
@@ -186,8 +194,7 @@ impl TxHandle {
 
 impl Drop for TxHandle {
     fn drop(&mut self) {
-        self.inner
-            .end_tx()
+        self.drop_safely()
             .expect("auto tx-end panicked. Call drop_safely() for non-panicking variant.");
     }
 }

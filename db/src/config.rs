@@ -1,6 +1,7 @@
 use crate::errors::{DbError, DbResult};
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct Config {
     pub path: PathBuf,
     pub schema_name: Option<String>,
