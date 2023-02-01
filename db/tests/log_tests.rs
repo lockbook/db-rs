@@ -1,6 +1,6 @@
 use db_rs::{Config, Db, LookupTable, Single};
 use db_rs_derive::Schema;
-use std::fs::{remove_dir_all, OpenOptions};
+use std::fs::{remove_dir_all, remove_file, OpenOptions};
 use std::io::{Read, Write};
 
 #[derive(Schema)]
@@ -62,10 +62,17 @@ fn inter_log() {
     file.read_to_end(&mut buf).unwrap();
 
     buf = buf[0..1000].to_vec();
+    remove_file(db.config().db_location().unwrap()).unwrap();
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(db.config().db_location().unwrap())
+        .unwrap();
     file.write_all(&buf).unwrap();
 
     let db = LogTests::init(Config::in_folder(dir)).unwrap();
     assert!(db.incomplete_write());
+    assert_eq!(db.table1.get(&0).unwrap(), "0 * 0 = 0");
     drop(remove_dir_all(dir));
 }
 

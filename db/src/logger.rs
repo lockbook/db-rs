@@ -58,11 +58,16 @@ impl Logger {
         let mut entries = vec![];
 
         while index < buffer.len() {
+            if buffer.len() < index + 4 + 1 {
+                self.inner.borrow_mut().incomplete_write = true;
+                return Ok(entries);
+            }
+
             let table_id = buffer[index];
             index += 1;
 
             let size = ByteCount::from_be_bytes(
-                buffer[index..index + 4]
+                buffer[index..index + 4] // todo bounds check
                     .try_into()
                     .expect("slice with incorrect length"),
             ) as usize;
@@ -74,12 +79,7 @@ impl Logger {
             }
 
             if table_id == 0 {
-                if buffer.len() < index + 4 {
-                    self.inner.borrow_mut().incomplete_write = true;
-                    return Ok(entries);
-                } else {
-                    continue;
-                }
+                continue;
             }
 
             let bytes = &buffer[index..index + size];
@@ -146,7 +146,7 @@ impl Logger {
         data_to_write
     }
 
-    pub fn compact_log(&self, data: &[u8]) -> DbResult<()> {
+    pub fn compact_log(&self, data: Vec<u8>) -> DbResult<()> {
         let mut inner = self.inner.borrow_mut();
         if inner.config.no_io {
             return Ok(());
@@ -156,7 +156,8 @@ impl Logger {
         let final_path = inner.config.db_location()?;
 
         let mut file = Self::open_file(&inner.config, &temp_path)?;
-        file.write_all(data)?;
+        let data = Self::log_entry(0, data);
+        file.write_all(&data)?;
 
         fs::rename(temp_path, final_path)?;
         inner.file = file;

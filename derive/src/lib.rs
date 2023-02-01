@@ -71,7 +71,7 @@ pub fn schema(input: TokenStream) -> TokenStream {
 
                 let mut data = vec![];
                 #( data.append(&mut self.#idents.compact_repr()?);)*
-                self.get_logger().compact_log(&data)?;
+                self.get_logger().compact_log(data)?;
                 Ok(())
             }
 
