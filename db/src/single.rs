@@ -23,14 +23,7 @@ where
     }
 
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
-        match bincode::deserialize(bytes)? {
-            Some(v) => {
-                self.inner = Some(v);
-            }
-            None => {
-                self.inner = None;
-            }
-        };
+        self.inner = bincode::deserialize(bytes)?;
 
         Ok(())
     }
