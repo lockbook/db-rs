@@ -52,7 +52,7 @@ fn main() {
 ## Active areas of thought and research
 
 + Because the db implementation (like redis) is single threaded, it forces you to achieve application throughput via low
-  latency rather than concurrency. Currently, this suits our needs, simply being embedded gives us more than enough
+  latency rather than concurrency. Currently, this suits our needs. Simply being embedded gives us more than enough
   throughput compared to something like Postgres. For use in a server-style setting put the database in
   an `Arc<Mutex<>>`.
 + The database offers no tools at the moment to define integrity constraints beyond what the Rust type system implicitly
