@@ -1,7 +1,9 @@
 [package]
 name = "db-rs-derive"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
+description = "macros for db-rs"
+license = "BSD-3-Clause"
 
 [lib]
 proc-macro = true
