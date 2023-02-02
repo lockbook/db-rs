@@ -38,8 +38,11 @@ impl Logger {
         let tx_data = None;
         let current_txs = 0;
 
-        let inner = LoggerInner { file, config, incomplete_write, tx_data, current_txs };
-        let inner = Rc::new(RefCell::new(inner));
+        let inner = Rc::new(
+            RefCell::new(
+                LoggerInner { file, config, incomplete_write, tx_data, current_txs }
+            )
+        );
 
         Ok(Self { inner })
     }
