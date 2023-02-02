@@ -9,4 +9,4 @@ proc-macro = true
 [dependencies]
 syn = "1.0.107"
 quote = "1.0.23"
-db-rs = { path = "../db" }
+db-rs = "0.1.1"
