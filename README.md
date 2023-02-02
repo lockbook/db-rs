@@ -7,7 +7,7 @@ An ergonomic, embedded, single-threaded database for Rustaceans.
 + Define a schema in Rust.
 + Use **your** types in the database as long as they implement `Serialize` and `Deserialize`. You don't have to fuss around
   with database-specific types and your types.
-+ All your database interactions are typesafe, when you `db.` your tooling will suggest a list of your tables, when you
++ All your database interactions are typesafe. When you type `db.`, your tooling will suggest a list of your tables. When you
   select a table, you'll be greeted with that table-type's contract populated with your types. No need to wrap your db
   in a handwritten type safe contract.
 + Supports a variety of simple data-structures, including LookupTables, Lists, and many more. Implementing your own
