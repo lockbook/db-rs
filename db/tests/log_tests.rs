@@ -19,7 +19,7 @@ fn log_compaction() {
         db.table1
             .insert(i, format!("{i} * {i} = {}", i as usize * i as usize))
             .unwrap();
-        let mut data = db.table2.get().cloned().unwrap_or_default();
+        let mut data = db.table2.data().cloned().unwrap_or_default();
         data.push(i as u128 * i as u128);
         db.table2.insert(data).unwrap();
     }
@@ -30,8 +30,8 @@ fn log_compaction() {
     assert!(log_size(&db) < (256 * (128 / 8)) + 1 + 4 + 100);
 
     let db = LogTests::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table1.get(&4), None);
-    assert_eq!(db.table2.get().unwrap().len() as u8, u8::MAX);
+    assert_eq!(db.table1.data().get(&4), None);
+    assert_eq!(db.table2.data().unwrap().len() as u8, u8::MAX);
 
     drop(remove_dir_all(dir));
 }
@@ -47,7 +47,7 @@ fn inter_log() {
         db.table1
             .insert(i, format!("{i} * {i} = {}", i as usize * i as usize))
             .unwrap();
-        let mut data = db.table2.get().cloned().unwrap_or_default();
+        let mut data = db.table2.data().cloned().unwrap_or_default();
         data.push(i as u128 * i as u128);
         db.table2.insert(data).unwrap();
     }
@@ -72,7 +72,7 @@ fn inter_log() {
 
     let db = LogTests::init(Config::in_folder(dir)).unwrap();
     assert!(db.incomplete_write());
-    assert_eq!(db.table1.get(&0).unwrap(), "0 * 0 = 0");
+    assert_eq!(db.table1.data().get(&0).unwrap(), "0 * 0 = 0");
     drop(remove_dir_all(dir));
 }
 

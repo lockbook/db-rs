@@ -76,8 +76,8 @@ where
         Ok(ret)
     }
 
-    pub fn get(&self, k: &K) -> Option<&V> {
-        self.inner.get(k)
+    pub fn data(&self) -> &HashMap<K, V> {
+        &self.inner
     }
 
     pub fn clear(&mut self) -> DbResult<()> {

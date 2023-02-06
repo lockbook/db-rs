@@ -5,18 +5,18 @@ use crate::TableId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-pub struct Single<V>
+pub struct Single<T>
 where
-    V: Serialize + DeserializeOwned,
+    T: Serialize + DeserializeOwned,
 {
     table_id: TableId,
-    inner: Option<V>,
+    inner: Option<T>,
     pub logger: Logger,
 }
 
-impl<V> Table for Single<V>
+impl<T> Table for Single<T>
 where
-    V: Serialize + DeserializeOwned,
+    T: Serialize + DeserializeOwned,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
         Self { table_id, inner: None, logger }
@@ -39,11 +39,11 @@ where
     }
 }
 
-impl<V> Single<V>
+impl<T> Single<T>
 where
-    V: Serialize + DeserializeOwned,
+    T: Serialize + DeserializeOwned,
 {
-    pub fn insert(&mut self, value: V) -> DbResult<Option<V>> {
+    pub fn insert(&mut self, value: T) -> DbResult<Option<T>> {
         let log_entry = Some(&value);
         let data = bincode::serialize(&log_entry)?;
 
@@ -54,12 +54,12 @@ where
         Ok(ret)
     }
 
-    pub fn get(&self) -> Option<&V> {
+    pub fn data(&self) -> Option<&T> {
         self.inner.as_ref()
     }
 
-    pub fn clear(&mut self) -> DbResult<Option<V>> {
-        let log_entry = Option::<V>::None;
+    pub fn clear(&mut self) -> DbResult<Option<T>> {
+        let log_entry = Option::<T>::None;
         let data = bincode::serialize(&log_entry)?;
         let ret = self.inner.take();
         self.logger.write(self.table_id, data)?;
