@@ -76,6 +76,14 @@ where
         Ok(ret)
     }
 
+    pub fn remove(&mut self, key: &K) -> DbResult<Option<V>> {
+        let log_entry = LogEntry::Remove::<&K, &V>(key);
+        let data = bincode::serialize(&log_entry)?;
+        let ret = self.inner.remove(key);
+        self.logger.write(self.table_id, data)?;
+        Ok(ret)
+    }
+
     pub fn data(&self) -> &HashMap<K, V> {
         &self.inner
     }
