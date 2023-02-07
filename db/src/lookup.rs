@@ -27,7 +27,7 @@ pub enum LogEntry<K, V> {
 impl<K, V> Table for LookupTable<K, V>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
-    V: Hash + Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
         Self { table_id, inner: HashMap::default(), logger }
