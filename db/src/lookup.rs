@@ -10,7 +10,7 @@ use std::hash::Hash;
 pub struct LookupTable<K, V>
 where
     K: Hash + Eq + Serialize,
-    V: Hash + Serialize,
+    V: Serialize,
 {
     table_id: TableId,
     inner: HashMap<K, V>,
@@ -64,7 +64,7 @@ where
 impl<K, V> LookupTable<K, V>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
-    V: Hash + Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
 {
     pub fn insert(&mut self, key: K, value: V) -> DbResult<Option<V>> {
         let log_entry = LogEntry::Insert(&key, &value);

@@ -1,6 +1,6 @@
 [package]
 name = "db-rs"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "fast, embedded, transactional, key value store"
 license = "BSD-3-Clause"
