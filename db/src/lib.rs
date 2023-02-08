@@ -7,6 +7,7 @@ pub use crate::logger::TxHandle;
 
 pub use crate::list::List;
 pub use crate::lookup::LookupTable;
+pub use crate::lookup_list::LookupSet;
 pub use crate::single::Single;
 
 pub mod config;
