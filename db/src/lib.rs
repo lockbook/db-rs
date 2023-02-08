@@ -15,6 +15,7 @@ pub mod errors;
 pub mod list;
 pub mod logger;
 pub mod lookup;
+pub mod lookup_list;
 pub mod single;
 pub mod table;
 
