@@ -42,7 +42,7 @@ fn inter_log() {
     drop(remove_dir_all(dir));
 
     let mut db = LogTests::init(Config::in_folder(dir)).unwrap();
-    assert!(!db.incomplete_write());
+    assert!(!db.incomplete_write().unwrap());
     for i in 0..u8::MAX {
         db.table1
             .insert(i, format!("{i} * {i} = {}", i as usize * i as usize))
@@ -56,22 +56,22 @@ fn inter_log() {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(db.config().db_location().unwrap())
+        .open(db.config().unwrap().db_location().unwrap())
         .unwrap();
 
     file.read_to_end(&mut buf).unwrap();
 
     buf = buf[0..1000].to_vec();
-    remove_file(db.config().db_location().unwrap()).unwrap();
+    remove_file(db.config().unwrap().db_location().unwrap()).unwrap();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(db.config().db_location().unwrap())
+        .open(db.config().unwrap().db_location().unwrap())
         .unwrap();
     file.write_all(&buf).unwrap();
 
     let db = LogTests::init(Config::in_folder(dir)).unwrap();
-    assert!(db.incomplete_write());
+    assert!(db.incomplete_write().unwrap());
     assert_eq!(db.table1.data().get(&0).unwrap(), "0 * 0 = 0");
     drop(remove_dir_all(dir));
 }
@@ -80,7 +80,7 @@ fn log_size<D: Db>(db: &D) -> usize {
     let mut buf = vec![];
     OpenOptions::new()
         .read(true)
-        .open(db.config().db_location().unwrap())
+        .open(db.config().unwrap().db_location().unwrap())
         .unwrap()
         .read_to_end(&mut buf)
         .unwrap();

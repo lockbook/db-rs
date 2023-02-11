@@ -58,7 +58,7 @@ fn tx_log_corrupt() {
 
     buf = buf[0..buf.len() / 2].to_vec();
 
-    remove_file(db.config().db_location().unwrap()).unwrap();
+    remove_file(db.config().unwrap().db_location().unwrap()).unwrap();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
