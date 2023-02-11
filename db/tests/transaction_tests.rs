@@ -52,7 +52,7 @@ fn tx_log_corrupt() {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(db.config().db_location().unwrap())
+        .open(db.config().unwrap().db_location().unwrap())
         .unwrap();
     file.read_to_end(&mut buf).unwrap();
 
@@ -62,7 +62,7 @@ fn tx_log_corrupt() {
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(db.config().db_location().unwrap())
+        .open(db.config().unwrap().db_location().unwrap())
         .unwrap();
     file.write_all(&buf).unwrap();
 
@@ -91,17 +91,17 @@ fn snapshot_inter() {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(db.config().db_location().unwrap())
+        .open(db.config().unwrap().db_location().unwrap())
         .unwrap();
     file.read_to_end(&mut buf).unwrap();
 
     buf = buf[0..buf.len() / 2].to_vec();
 
-    remove_file(db.config().db_location().unwrap()).unwrap();
+    remove_file(db.config().unwrap().db_location().unwrap()).unwrap();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(db.config().db_location().unwrap())
+        .open(db.config().unwrap().db_location().unwrap())
         .unwrap();
     file.write_all(&buf).unwrap();
 
