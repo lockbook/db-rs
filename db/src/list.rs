@@ -3,6 +3,7 @@ use crate::{DbResult, Logger, TableId};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug)]
 pub struct List<T>
 where
     T: Serialize + DeserializeOwned,
