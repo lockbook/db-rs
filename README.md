@@ -20,8 +20,8 @@ An ergonomic, embedded, single-threaded database for Rustaceans.
 Add the following to your `Cargo.toml`:
 
 ```toml
-db-rs = "0.1.10"
-db-rs-derive = "0.1.10"
+db-rs = "0.1.11"
+db-rs-derive = "0.1.11"
 ```
 
 Define your schema:

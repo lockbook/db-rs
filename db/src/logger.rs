@@ -11,11 +11,12 @@ pub struct LogFormat<'a> {
     pub bytes: &'a [u8],
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Logger {
     inner: Arc<Mutex<LoggerInner>>,
 }
 
+#[derive(Debug)]
 struct LoggerInner {
     config: Config,
     file: File,
