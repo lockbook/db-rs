@@ -10,6 +10,7 @@ pub use crate::lookup::LookupTable;
 pub use crate::lookup_set::LookupSet;
 pub use crate::single::Single;
 
+pub mod compacter;
 pub mod config;
 pub mod db;
 pub mod errors;
