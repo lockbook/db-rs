@@ -8,6 +8,16 @@ use std::time::Duration;
 type CancelSig = Arc<AtomicBool>;
 
 pub trait BackgroundCompacter {
+    /// Periodically compact the database log in a separate thread
+    /// You can call this function if your db is wrapped in an Arc<Mutex>
+    ///
+    /// freq determines how often the background thread will aquire a mutex
+    /// and call compact_log() on your db
+    ///
+    /// cancel is an AtomicBool which can be passed in and signal that compaction
+    /// should cease (could take up-to freq to return)
+    ///
+    /// this fn returns the number of times compaction took place
     fn begin_compacter(&self, freq: Duration, cancel: CancelSig) -> JoinHandle<DbResult<usize>>;
 }
 
