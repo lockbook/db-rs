@@ -15,7 +15,7 @@ pub struct LookupSchema {
 
 #[test]
 fn test() {
-    let dir = "/tmp/a/";
+    let dir = "/tmp/l/";
     drop(fs::remove_dir_all(dir));
     let mut db = LookupSchema::init(Config::in_folder(dir)).unwrap();
     db.table1.insert(5, "test".to_string()).unwrap();
@@ -30,7 +30,7 @@ fn test() {
 
 #[test]
 fn test2() {
-    let dir = "/tmp/b/";
+    let dir = "/tmp/m/";
 
     drop(fs::remove_dir_all(dir));
     let mut db = LookupSchema::init(Config::in_folder(dir)).unwrap();
