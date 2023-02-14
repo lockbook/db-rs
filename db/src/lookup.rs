@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
 
+#[derive(Debug)]
 pub struct LookupTable<K, V>
 where
     K: Hash + Eq + Serialize,
@@ -63,8 +64,8 @@ where
 
 impl<K, V> LookupTable<K, V>
 where
-    K: Hash + Eq + Serialize + DeserializeOwned,
-    V: Serialize + DeserializeOwned,
+    K: Hash + Eq + Serialize,
+    V: Serialize,
 {
     pub fn insert(&mut self, key: K, value: V) -> DbResult<Option<V>> {
         let log_entry = LogEntry::Insert(&key, &value);

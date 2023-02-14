@@ -1,22 +1,22 @@
 use crate::config::Config;
 use crate::errors::DbResult;
 use crate::{ByteCount, TableId};
-use std::cell::RefCell;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 pub struct LogFormat<'a> {
     pub table_id: TableId,
     pub bytes: &'a [u8],
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Logger {
-    inner: Rc<RefCell<LoggerInner>>,
+    inner: Arc<Mutex<LoggerInner>>,
 }
 
+#[derive(Debug)]
 struct LoggerInner {
     config: Config,
     file: File,
@@ -37,7 +37,7 @@ impl Logger {
         let tx_data = None;
         let current_txs = 0;
 
-        let inner = Rc::new(RefCell::new(LoggerInner {
+        let inner = Arc::new(Mutex::new(LoggerInner {
             file,
             config,
             incomplete_write,
@@ -51,7 +51,7 @@ impl Logger {
     pub fn get_bytes(&self) -> DbResult<Vec<u8>> {
         let mut buffer: Vec<u8> = Vec::new();
 
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock()?;
         inner.file.read_to_end(&mut buffer)?;
 
         Ok(buffer)
@@ -63,7 +63,7 @@ impl Logger {
 
         while index < buffer.len() {
             if buffer.len() < index + 4 + 1 {
-                self.inner.borrow_mut().incomplete_write = true;
+                self.inner.lock()?.incomplete_write = true;
                 return Ok(entries);
             }
 
@@ -78,7 +78,7 @@ impl Logger {
             index += 4;
 
             if buffer.len() < index + size {
-                self.inner.borrow_mut().incomplete_write = true;
+                self.inner.lock()?.incomplete_write = true;
                 return Ok(entries);
             }
 
@@ -94,18 +94,18 @@ impl Logger {
         Ok(entries)
     }
 
-    pub fn begin_tx(&self) -> TxHandle {
+    pub fn begin_tx(&self) -> DbResult<TxHandle> {
         let h = TxHandle { inner: self.clone() };
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock()?;
         if inner.tx_data.is_none() {
             inner.tx_data = Some(vec![]);
         }
         inner.current_txs += 1;
-        h
+        Ok(h)
     }
 
     pub fn end_tx(&self) -> DbResult<()> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock()?;
         if inner.current_txs == 0 {
             return Ok(());
         }
@@ -123,7 +123,7 @@ impl Logger {
     }
 
     pub fn write(&self, id: TableId, data: Vec<u8>) -> DbResult<()> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock()?;
         if let Some(tx_data) = &mut inner.tx_data {
             tx_data.append(&mut Self::log_entry(id, data));
             return Ok(());
@@ -134,7 +134,7 @@ impl Logger {
     }
 
     pub fn write_to_file(&self, id: TableId, data: Vec<u8>) -> DbResult<()> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock()?;
         if !inner.config.no_io {
             inner.file.write_all(&Self::log_entry(id, data))?;
         }
@@ -151,7 +151,7 @@ impl Logger {
     }
 
     pub fn compact_log(&self, data: Vec<u8>) -> DbResult<()> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock()?;
         if inner.config.no_io {
             return Ok(());
         }
@@ -177,12 +177,12 @@ impl Logger {
             .open(db_location)?)
     }
 
-    pub(crate) fn config(&self) -> Config {
-        self.inner.borrow().config.clone()
+    pub(crate) fn config(&self) -> DbResult<Config> {
+        Ok(self.inner.lock()?.config.clone())
     }
 
-    pub(crate) fn incomplete_write(&self) -> bool {
-        self.inner.borrow().incomplete_write
+    pub(crate) fn incomplete_write(&self) -> DbResult<bool> {
+        Ok(self.inner.lock()?.incomplete_write)
     }
 }
 

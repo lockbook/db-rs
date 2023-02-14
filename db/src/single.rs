@@ -5,6 +5,7 @@ use crate::TableId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+#[derive(Debug)]
 pub struct Single<T>
 where
     T: Serialize + DeserializeOwned,
