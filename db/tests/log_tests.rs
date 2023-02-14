@@ -1,7 +1,12 @@
+use db_rs::compacter::BackgroundCompacter;
 use db_rs::{Config, Db, LookupTable, Single};
 use db_rs_derive::Schema;
 use std::fs::{remove_dir_all, remove_file, OpenOptions};
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 #[derive(Schema)]
 pub struct LogTests {
@@ -73,6 +78,21 @@ fn inter_log() {
     let db = LogTests::init(Config::in_folder(dir)).unwrap();
     assert!(db.incomplete_write().unwrap());
     assert_eq!(db.table1.data().get(&0).unwrap(), "0 * 0 = 0");
+    drop(remove_dir_all(dir));
+}
+
+#[test]
+#[ignore] // ignored so tests don't get stuck here
+fn auto_log_compacter() {
+    let dir = "/tmp/fa";
+    drop(remove_dir_all(dir));
+    let db = Arc::new(Mutex::new(LogTests::init(Config::in_folder(dir)).unwrap()));
+    let cancel = Arc::new(AtomicBool::new(false));
+    let handle = db.begin_compacter(Duration::from_secs(1), cancel.clone());
+    thread::sleep(Duration::from_millis(2500));
+    cancel.store(true, Ordering::Relaxed);
+    assert_eq!(handle.join().unwrap().unwrap(), 2);
+
     drop(remove_dir_all(dir));
 }
 
