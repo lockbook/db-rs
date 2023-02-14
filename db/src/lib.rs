@@ -7,6 +7,7 @@ pub use crate::logger::TxHandle;
 
 pub use crate::list::List;
 pub use crate::lookup::LookupTable;
+pub use crate::lookup_set::LookupSet;
 pub use crate::single::Single;
 
 pub mod config;
@@ -15,6 +16,7 @@ pub mod errors;
 pub mod list;
 pub mod logger;
 pub mod lookup;
+pub mod lookup_set;
 pub mod single;
 pub mod table;
 
