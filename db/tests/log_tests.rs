@@ -1,9 +1,8 @@
 use db_rs::compacter::BackgroundCompacter;
-use db_rs::{Config, Db, LookupTable, Single};
+use db_rs::{CancelSig, Config, Db, LookupTable, Single};
 use db_rs_derive::Schema;
 use std::fs::{remove_dir_all, remove_file, OpenOptions};
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -87,10 +86,10 @@ fn auto_log_compacter() {
     let dir = "/tmp/fa";
     drop(remove_dir_all(dir));
     let db = Arc::new(Mutex::new(LogTests::init(Config::in_folder(dir)).unwrap()));
-    let cancel = Arc::new(AtomicBool::new(false));
+    let cancel = CancelSig::default();
     let handle = db.begin_compacter(Duration::from_secs(1), cancel.clone());
     thread::sleep(Duration::from_millis(2500));
-    cancel.store(true, Ordering::Relaxed);
+    cancel.cancel();
     assert_eq!(handle.join().unwrap().unwrap(), 2);
 
     drop(remove_dir_all(dir));

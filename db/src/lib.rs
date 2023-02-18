@@ -1,3 +1,5 @@
+pub use crate::compacter::BackgroundCompacter;
+pub use crate::compacter::CancelSig;
 pub use crate::config::Config;
 pub use crate::db::Db;
 pub use crate::errors::DbError;
