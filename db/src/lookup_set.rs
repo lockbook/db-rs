@@ -19,6 +19,7 @@ where
 pub enum LogEntry<K, V> {
     Insert(K, V),
     Remove(K, V),
+    CreateKey(K),
     ClearKey(K),
     Clear,
 }
@@ -35,18 +36,15 @@ where
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
         match bincode::deserialize::<LogEntry<K, V>>(bytes)? {
             LogEntry::Insert(k, v) => {
-                if let Some(list) = self.inner.get_mut(&k) {
-                    list.insert(v);
-                } else {
-                    let mut set = HashSet::new();
-                    set.insert(v);
-                    self.inner.insert(k, set);
-                }
+                self.insert_inner(k, v);
             }
             LogEntry::Remove(k, v) => {
                 if let Some(x) = self.inner.get_mut(&k) {
                     x.remove(&v);
                 }
+            }
+            LogEntry::CreateKey(k) => {
+                self.inner.insert(k, HashSet::new());
             }
             LogEntry::ClearKey(k) => {
                 self.inner.remove(&k);
@@ -62,6 +60,12 @@ where
     fn compact_repr(&self) -> DbResult<Vec<u8>> {
         let mut repr = vec![];
         for (k, values) in &self.inner {
+            if values.is_empty() {
+                let data = bincode::serialize(&LogEntry::<&K, &V>::CreateKey(k))?;
+                let mut data = Logger::log_entry(self.table_id, data);
+                repr.append(&mut data);
+                continue;
+            }
             for v in values {
                 let data = bincode::serialize(&LogEntry::Insert(k, v))?;
                 let mut data = Logger::log_entry(self.table_id, data);
@@ -78,26 +82,44 @@ where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned + Eq + Hash,
 {
+    pub(crate) fn insert_inner(&mut self, k: K, v: V) -> bool {
+        if let Some(set) = self.inner.get_mut(&k) {
+            set.insert(v)
+        } else {
+            let mut set = HashSet::new();
+            set.insert(v);
+            self.inner.insert(k, set);
+            false
+        }
+    }
+
     pub fn insert(&mut self, key: K, value: V) -> DbResult<bool> {
         let log_entry = LogEntry::Insert(&key, &value);
         let data = bincode::serialize(&log_entry)?;
+        let ret = self.insert_inner(key, value);
+        self.logger.write(self.table_id, data)?;
+        Ok(ret)
+    }
 
-        let ret = self
-            .inner
-            .get_mut(&key)
-            .unwrap_or(&mut HashSet::default())
-            .insert(value);
+    pub fn create_key(&mut self, key: K) -> DbResult<Option<HashSet<V>>> {
+        let log_entry = LogEntry::<&K, &V>::CreateKey(&key);
+        let data = bincode::serialize(&log_entry)?;
+
+        let ret = self.inner.insert(key, HashSet::new());
 
         self.logger.write(self.table_id, data)?;
         Ok(ret)
     }
 
     pub fn remove(&mut self, key: &K, value: &V) -> DbResult<bool> {
-        let log_entry = LogEntry::Remove::<&K, &V>(key, value);
-        let data = bincode::serialize(&log_entry)?;
-        let ret = self.inner.get_mut(key).unwrap().remove(value);
-        self.logger.write(self.table_id, data)?;
-        Ok(ret)
+        if let Some(set) = self.inner.get_mut(key) {
+            let log_entry = LogEntry::Remove::<&K, &V>(key, value);
+            let data = bincode::serialize(&log_entry)?;
+            self.logger.write(self.table_id, data)?;
+            Ok(set.remove(value))
+        } else {
+            Ok(false)
+        }
     }
 
     pub fn data(&self) -> &HashMap<K, HashSet<V>> {
@@ -112,12 +134,13 @@ where
 
         Ok(())
     }
-    pub fn clear_key(&mut self, key: &K) -> DbResult<()> {
-        self.inner.get_mut(key).unwrap().clear();
-        let log_entry = LogEntry::<K, V>::Clear;
+
+    pub fn clear_key(&mut self, key: &K) -> DbResult<Option<HashSet<V>>> {
+        let log_entry = LogEntry::<&K, &V>::ClearKey(key);
         let data = bincode::serialize(&log_entry)?;
+        let ret = self.inner.remove(key);
         self.logger.write(self.table_id, data)?;
 
-        Ok(())
+        Ok(ret)
     }
 }

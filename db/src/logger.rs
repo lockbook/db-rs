@@ -71,7 +71,7 @@ impl Logger {
             index += 1;
 
             let size = ByteCount::from_be_bytes(
-                buffer[index..index + 4] // todo bounds check
+                buffer[index..index + 4]
                     .try_into()
                     .expect("slice with incorrect length"),
             ) as usize;
@@ -115,39 +115,46 @@ impl Logger {
             let data = inner.tx_data.take();
             drop(inner);
             if let Some(data) = data {
-                self.write_to_file(0, data)?;
+                self.write_to_file(Self::log_entry(0, data))?;
             }
         }
 
         Ok(())
     }
 
-    pub fn write(&self, id: TableId, data: Vec<u8>) -> DbResult<()> {
+    pub fn write(&self, id: TableId, mut data: Vec<u8>) -> DbResult<()> {
         let mut inner = self.inner.lock()?;
-        if let Some(tx_data) = &mut inner.tx_data {
-            tx_data.append(&mut Self::log_entry(id, data));
+        if inner.config.no_io {
             return Ok(());
         }
+
+        if let Some(tx_data) = &mut inner.tx_data {
+            tx_data.extend(Self::header(id, &data));
+            tx_data.append(&mut data);
+            return Ok(());
+        }
+
         drop(inner);
 
-        self.write_to_file(id, data)
+        self.write_to_file(Self::log_entry(id, data))
     }
 
-    pub fn write_to_file(&self, id: TableId, data: Vec<u8>) -> DbResult<()> {
+    fn write_to_file(&self, data: Vec<u8>) -> DbResult<()> {
         let mut inner = self.inner.lock()?;
-        if !inner.config.no_io {
-            inner.file.write_all(&Self::log_entry(id, data))?;
-        }
+        inner.file.write_all(&data)?;
         Ok(())
     }
 
+    pub fn header(id: TableId, data: &[u8]) -> [u8; 5] {
+        let size_info = (data.len() as ByteCount).to_be_bytes();
+        [id, size_info[0], size_info[1], size_info[2], size_info[3]]
+    }
+
     pub fn log_entry(id: TableId, mut data: Vec<u8>) -> Vec<u8> {
-        // could be more efficient by unsafe prepending to data
-        let mut data_to_write = Vec::with_capacity(data.len() + 5);
-        data_to_write.push(id);
-        data_to_write.extend((data.len() as ByteCount).to_be_bytes());
-        data_to_write.append(&mut data);
-        data_to_write
+        let header = Self::header(id, &data);
+        data.reserve(header.len());
+        data.splice(0..0, header.into_iter());
+        data
     }
 
     pub fn compact_log(&self, data: Vec<u8>) -> DbResult<()> {
