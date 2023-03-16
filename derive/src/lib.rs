@@ -36,7 +36,7 @@ pub fn schema(input: TokenStream) -> TokenStream {
         );
     }
 
-    let ids: Vec<u8> = (1..(idents.len() + 1) as u8).into_iter().collect();
+    let ids: Vec<u8> = (1..(idents.len() + 1) as u8).collect();
 
     let output = quote! {
 
