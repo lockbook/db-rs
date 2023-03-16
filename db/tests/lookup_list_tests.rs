@@ -21,8 +21,7 @@ fn test() {
     drop(db);
 
     let db = LookupSchema::init(Config::in_folder(dir)).unwrap();
-    let mut target = Vec::new();
-    target.push("test".to_string());
+    let target = vec!["test".to_string()];
     assert_eq!(db.table1.data().get(&5).unwrap(), &target);
     drop(fs::remove_dir_all(dir));
 }
