@@ -82,21 +82,19 @@ where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned + Eq + Hash,
 {
-    pub(crate) fn push_inner(&mut self, k: K, v: V) -> bool {
+    pub(crate) fn push_inner(&mut self, k: K, v: V) {
         if let Some(vec) = self.inner.get_mut(&k) {
             vec.push(v);
-            true
         } else {
             self.inner.insert(k, vec![v]);
-            false
         }
     }
-    pub fn push(&mut self, k: K, v: V) -> DbResult<bool> {
+    pub fn push(&mut self, k: K, v: V) -> DbResult<()> {
         let log_entry = LogEntry::Push(&k, &v);
         let data = bincode::serialize(&log_entry)?;
-        let ret = self.push_inner(k, v);
+        self.push_inner(k, v);
         self.logger.write(self.table_id, data)?;
-        Ok(ret)
+        Ok(())
     }
 
     pub fn create_key(&mut self, key: K) -> DbResult<Option<Vec<V>>> {
