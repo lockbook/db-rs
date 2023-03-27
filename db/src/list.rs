@@ -70,8 +70,27 @@ where
         let log_entry = LogEntry::Push(&t);
         let data = bincode::serialize(&log_entry)?;
         self.inner.push(t);
+
         self.logger.write(self.table_id, data)?;
         Ok(())
+    }
+
+    pub fn pop(&mut self) -> DbResult<Option<T>> {
+        let log_entry: LogEntry<()> = LogEntry::Remove(self.inner.len() - 1);
+        let data = bincode::serialize(&log_entry)?;
+        let result = self.inner.pop();
+
+        self.logger.write(self.table_id, data)?;
+        Ok(result)
+    }
+
+    pub fn remove(&mut self, index: usize) -> DbResult<T> {
+        let log_entry: LogEntry<usize> = LogEntry::Remove(index);
+        let data = bincode::serialize(&log_entry)?;
+        let result = self.inner.remove(index);
+
+        self.logger.write(self.table_id, data)?;
+        Ok(result)
     }
 
     pub fn data(&self) -> &[T] {
