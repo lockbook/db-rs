@@ -18,7 +18,6 @@ pub enum LogEntry<T> {
     Push(T),
     Insert(usize, T),
     Remove(usize),
-    Pop(),
     Clear,
 }
 
@@ -41,9 +40,6 @@ where
             }
             LogEntry::Push(el) => {
                 self.inner.push(el);
-            }
-            LogEntry::Pop() => {
-                self.inner.pop();
             }
             LogEntry::Clear => {
                 self.inner.clear();
@@ -80,7 +76,7 @@ where
     }
 
     pub fn pop(&mut self) -> DbResult<Option<T>> {
-        let log_entry: LogEntry<()> = LogEntry::Pop();
+        let log_entry: LogEntry<()> = LogEntry::Remove(self.inner.len() - 1);
         let data = bincode::serialize(&log_entry)?;
         let result = self.inner.pop();
 
