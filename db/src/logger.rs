@@ -108,6 +108,9 @@ impl Logger {
 
     pub fn end_tx(&self) -> DbResult<()> {
         let mut inner = self.inner.lock()?;
+        if inner.config.no_io {
+            return Ok(());
+        }
         if inner.current_txs == 0 {
             return Ok(());
         }

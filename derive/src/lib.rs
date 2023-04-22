@@ -46,8 +46,9 @@ pub fn schema(input: TokenStream) -> TokenStream {
 
                 let schema_name = stringify!(#ident);
                 config.schema_name = Some(schema_name.to_string());
+                let no_io = *&config.no_io;
                 let mut log = db_rs::Logger::init(config)?;
-                let log_data = log.get_bytes()?;
+                let log_data = if no_io { Vec::new() } else { log.get_bytes()? };
                 let log_entries = log.get_entries(&log_data)?;
 
                 #( let mut #idents = <#types>::init(#ids, log.clone()); )*
