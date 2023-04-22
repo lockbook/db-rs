@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::errors::DbResult;
-use crate::{ByteCount, TableId};
+use crate::{ByteCount, DbError, TableId};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -19,7 +19,7 @@ pub struct Logger {
 #[derive(Debug)]
 struct LoggerInner {
     config: Config,
-    file: File,
+    file: Option<File>,
     incomplete_write: bool,
     current_txs: usize,
     tx_data: Option<Vec<u8>>,
@@ -31,7 +31,7 @@ impl Logger {
             fs::create_dir_all(&config.path)?;
         }
 
-        let file = Self::open_file(&config, &config.db_location()?)?;
+        let file = if config.no_io { None } else { Some(Self::open_file(&config, &config.db_location()?)?) };
 
         let incomplete_write = false;
         let tx_data = None;
@@ -49,10 +49,12 @@ impl Logger {
     }
 
     pub fn get_bytes(&self) -> DbResult<Vec<u8>> {
+        let Some(file) = &mut self.inner.lock()?.file else {
+            return Err(DbError::Unexpected("no file"));
+        };
         let mut buffer: Vec<u8> = Vec::new();
 
-        let mut inner = self.inner.lock()?;
-        inner.file.read_to_end(&mut buffer)?;
+        file.read_to_end(&mut buffer)?;
 
         Ok(buffer)
     }
@@ -140,8 +142,10 @@ impl Logger {
     }
 
     fn write_to_file(&self, data: Vec<u8>) -> DbResult<()> {
-        let mut inner = self.inner.lock()?;
-        inner.file.write_all(&data)?;
+        let Some(file) = &mut self.inner.lock()?.file else {
+            return Err(DbError::Unexpected("no file"));
+        };
+        file.write_all(&data)?;
         Ok(())
     }
 
@@ -171,7 +175,7 @@ impl Logger {
         file.write_all(&data)?;
 
         fs::rename(temp_path, final_path)?;
-        inner.file = file;
+        inner.file = Some(file);
 
         Ok(())
     }
