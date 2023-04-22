@@ -50,7 +50,7 @@ impl Logger {
 
     pub fn get_bytes(&self) -> DbResult<Vec<u8>> {
         let Some(file) = &mut self.inner.lock()?.file else {
-            return Err(DbError::Unexpected("no file"));
+            return Err(DbError::Unexpected("`get_bytes` failed, no file"));
         };
         let mut buffer: Vec<u8> = Vec::new();
 
@@ -143,7 +143,7 @@ impl Logger {
 
     fn write_to_file(&self, data: Vec<u8>) -> DbResult<()> {
         let Some(file) = &mut self.inner.lock()?.file else {
-            return Err(DbError::Unexpected("no file"));
+            return Err(DbError::Unexpected("`write_to_file` failed, no file"));
         };
         file.write_all(&data)?;
         Ok(())
