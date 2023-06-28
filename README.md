@@ -2,7 +2,7 @@
 
 An ergonomic, embedded, single-threaded database for Rustaceans.
 
-## Strengths
+### Strengths
 
 -   Define a schema in Rust.
 -   Use **your** types in the database as long as they implement `Serialize` and `Deserialize`. You don't have to fuss around
@@ -15,20 +15,20 @@ An ergonomic, embedded, single-threaded database for Rustaceans.
 -   All table mutations are persisted to an append only log using the fast & compact bincode representation of your types.
 -   You can `begin_transaction()`s to express atomic updates to multiple tables.
 
-## Quickstart
+### Quickstart
 
 Add the following to your `Cargo.toml`:
 
 ```toml
-db-rs = "0.1.18"
-db-rs-derive = "0.1.18"
+db-rs = "0.2.0"
+db-rs-derive = "0.2.0"
 ```
 
 Define your schema:
 
 ```rust
 use db_rs_derive::Schema;
-use db_rs::{Single, LookupTable};
+use db_rs::{Single, List, LookupTable};
 
 #[derive(Schema)]
 struct SchemaV1 {
@@ -44,13 +44,43 @@ Initialize your DB:
 use db_rs::Db;
 use db_rs::Config;
 
-fn main() {
-    let mut db = SchemaV1::init(Config::in_folder("/tmp/test/"))?;
-    db.owner.insert("Parth".to_string())?;
-}
+let mut db = SchemaV1::init(Config::in_folder("/tmp/test/"))?;
+db.owner.insert("Parth".to_string())?;
+
+println!("{}", db.owner.data().unwrap());
 ```
 
-## Active areas of thought and research
+### Table Types
+
+Each table has an in-memory representation and a corresponding log entry format. For instance
+[List]'s in memory format is a [Vec], and you can look at it's corresponding [list::LogEntry]
+to see how writes will be written to disk.
+
+Tables that start with `Lookup` have a `HashMap` as part of their in memory format.
+[LookupTable] is the most general form, while [LookupList] and [LookupSet] are specializations
+for people who want `HashMap<K, Vec<V>>` or `HashMap<K, HashSet<V>>`. Their reason for
+existence is better log performance in the case of small modifications to the `Vec` or
+`HashSet` in question (see [lookup_list::LogEntry] or [lookup_set::LogEntry]).
+
+
+### Log Compaction
+
+At any point you can call [Db::compact_log] on your database. This will atomically write a
+compact representation of all your current tables. For example if there's a key in a
+LookupTable that was written to many times, the compact representation will only contain the
+last value. Each table type descibes it's own compact representation.
+
+If your database is in an `Arc<Mutex>>` you can additionally use the [BackgroundCompacter]
+which will perform compactions periodically in a separate thread.
+
+### TXs and Batch Writing
+
+You can [Db::begin_transaction] which will allow you to express batch operations that can be
+discarded as a set if your program is interrupted. Presently there is no way to abort a
+transaction. TXs are also a mechanism for batch writing, log entries are kept in memory until
+the transaction completes and written once to disk.
+
+### Active areas of thought and research
 
 -   Because the db implementation (like redis) is single threaded, it forces you to achieve application throughput via low
     latency rather than concurrency. Currently, this suits our needs. Simply being embedded gives us more than enough
@@ -59,6 +89,9 @@ fn main() {
 -   The database offers no tools at the moment to define integrity constraints beyond what the Rust type system implicitly
     enforces (non-null for instance). At the moment for us, this is simply an application side concern.
 
-## Used by
+### Used by
 
 -   [Lockbook](https://github.com/lockbook/lockbook)
+
+
+License: BSD-3-Clause

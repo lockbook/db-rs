@@ -3,6 +3,7 @@ use crate::{DbResult, Logger, TableId};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+/// Table backed by a [Vec] of `T`
 #[derive(Debug)]
 pub struct List<T>
 where
@@ -93,7 +94,7 @@ where
         Ok(result)
     }
 
-    pub fn data(&self) -> &[T] {
+    pub fn get(&self) -> &[T] {
         &self.inner
     }
 }

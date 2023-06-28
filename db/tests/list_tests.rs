@@ -15,10 +15,10 @@ fn list_test() {
     drop(fs::remove_dir_all(dir));
     let mut db = Schema::init(Config::in_folder(dir)).unwrap();
     db.list1.push("a".to_string()).unwrap();
-    assert_eq!(db.list1.data(), ["a"]);
+    assert_eq!(db.list1.get(), ["a"]);
 
     let db = Schema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.list1.data(), ["a"]);
+    assert_eq!(db.list1.get(), ["a"]);
 
     drop(fs::remove_dir_all(dir));
 }
@@ -41,14 +41,14 @@ fn list_test2() {
     db.list3.push("i".to_string()).unwrap();
     db.list3.push("j".to_string()).unwrap();
 
-    assert_eq!(db.list1.data(), ["a"]);
-    assert_eq!(db.list2.data(), ["b", "c", "d"]);
-    assert_eq!(db.list3.data(), ["e", "f", "g", "h", "i", "j"]);
+    assert_eq!(db.list1.get(), ["a"]);
+    assert_eq!(db.list2.get(), ["b", "c", "d"]);
+    assert_eq!(db.list3.get(), ["e", "f", "g", "h", "i", "j"]);
 
     let db = Schema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.list1.data(), ["a"]);
-    assert_eq!(db.list2.data(), ["b", "c", "d"]);
-    assert_eq!(db.list3.data(), ["e", "f", "g", "h", "i", "j"]);
+    assert_eq!(db.list1.get(), ["a"]);
+    assert_eq!(db.list2.get(), ["b", "c", "d"]);
+    assert_eq!(db.list3.get(), ["e", "f", "g", "h", "i", "j"]);
     drop(fs::remove_dir_all(dir));
 }
 #[test]
@@ -73,13 +73,13 @@ fn list_test3() {
     db.list3.pop().unwrap();
     db.list3.pop().unwrap();
 
-    assert_eq!(db.list1.data(), ["a"]);
-    assert_eq!(db.list2.data(), ["b", "d"]);
-    assert_eq!(db.list3.data(), ["e", "f", "g", "h"]);
+    assert_eq!(db.list1.get(), ["a"]);
+    assert_eq!(db.list2.get(), ["b", "d"]);
+    assert_eq!(db.list3.get(), ["e", "f", "g", "h"]);
 
     let db = Schema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.list1.data(), ["a"]);
-    assert_eq!(db.list2.data(), ["b", "d"]);
-    assert_eq!(db.list3.data(), ["e", "f", "g", "h"]);
+    assert_eq!(db.list1.get(), ["a"]);
+    assert_eq!(db.list2.get(), ["b", "d"]);
+    assert_eq!(db.list3.get(), ["e", "f", "g", "h"]);
     drop(fs::remove_dir_all(dir));
 }
