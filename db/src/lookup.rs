@@ -9,6 +9,7 @@ use std::hash::Hash;
 
 /// A table backed by a [HashMap] of type `K`, `V`
 #[derive(Debug)]
+#[cfg_attr(feature = "clone", derive(Clone))]
 pub struct LookupTable<K, V>
 where
     K: Hash + Eq + Serialize,

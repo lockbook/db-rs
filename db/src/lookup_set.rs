@@ -7,6 +7,7 @@ use std::hash::Hash;
 
 /// A special case of [crate::lookup::LookupTable] where the value of the [HashMap] is a `HashSet<V>`.
 #[derive(Debug)]
+#[cfg_attr(feature = "clone", derive(Clone))]
 pub struct LookupSet<K, V>
 where
     K: Hash + Eq + Serialize,

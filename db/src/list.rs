@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// Table backed by a [Vec] of `T`
 #[derive(Debug)]
+#[cfg_attr(feature = "clone", derive(Clone))]
 pub struct List<T>
 where
     T: Serialize + DeserializeOwned,
