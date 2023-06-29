@@ -19,7 +19,7 @@ pub struct Logger {
 #[derive(Debug)]
 struct LoggerInner {
     config: Config,
-    file: File,
+    file: Option<File>,
     incomplete_write: bool,
     current_txs: usize,
     tx_data: Option<Vec<u8>>,
@@ -31,7 +31,11 @@ impl Logger {
             fs::create_dir_all(&config.path)?;
         }
 
-        let file = Self::open_file(&config, &config.db_location()?)?;
+        let file = if config.no_io {
+            None
+        } else {
+            Some(Self::open_file(&config, &config.db_location()?)?)
+        };
 
         let incomplete_write = false;
         let tx_data = None;
@@ -52,7 +56,9 @@ impl Logger {
         let mut buffer: Vec<u8> = Vec::new();
 
         let mut inner = self.inner.lock()?;
-        inner.file.read_to_end(&mut buffer)?;
+        if let Some(file) = inner.file.as_mut() {
+            file.read_to_end(&mut buffer)?;
+        }
 
         Ok(buffer)
     }
@@ -141,7 +147,9 @@ impl Logger {
 
     fn write_to_file(&self, data: Vec<u8>) -> DbResult<()> {
         let mut inner = self.inner.lock()?;
-        inner.file.write_all(&data)?;
+        if let Some(file) = inner.file.as_mut() {
+            file.write_all(&data)?;
+        }
         Ok(())
     }
 
@@ -171,7 +179,7 @@ impl Logger {
         file.write_all(&data)?;
 
         fs::rename(temp_path, final_path)?;
-        inner.file = file;
+        inner.file = Some(file);
 
         Ok(())
     }
@@ -179,7 +187,7 @@ impl Logger {
     fn open_file(config: &Config, db_location: &Path) -> DbResult<File> {
         Ok(OpenOptions::new()
             .read(true)
-            .create(config.create_db)
+            .create(config.create_db || config.read_only)
             .append(!config.read_only)
             .open(db_location)?)
     }

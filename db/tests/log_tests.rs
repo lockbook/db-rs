@@ -81,6 +81,14 @@ fn inter_log() {
 }
 
 #[test]
+fn no_io_tests() {
+    let cfg = Config::no_io();
+    let mut log = LogTests::init(cfg).unwrap();
+    log.table1.insert(3, "test".to_string()).unwrap();
+    assert_eq!(log.table1.get().get(&3).unwrap(), "test");
+}
+
+#[test]
 #[ignore] // ignored so tests don't get stuck here
 fn auto_log_compacter() {
     let dir = "/tmp/fa";
