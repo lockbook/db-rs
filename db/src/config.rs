@@ -36,6 +36,17 @@ impl Config {
         }
     }
 
+    pub fn no_io() -> Self {
+        Self {
+            path: Default::default(),
+            schema_name: None,
+            create_path: false,
+            create_db: false,
+            read_only: true,
+            no_io: true,
+        }
+    }
+
     pub fn in_folder<P>(p: P) -> Self
     where
         P: AsRef<Path>,
