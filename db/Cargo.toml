@@ -6,6 +6,9 @@ description = "fast, embedded, transactional, key value store"
 license = "BSD-3-Clause"
 readme = "../README.md"
 
+[features]
+clone = []
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3.3"

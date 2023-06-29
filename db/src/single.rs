@@ -7,6 +7,7 @@ use serde::Serialize;
 
 /// A table which stores 0 or 1 values -- backed by [Option]
 #[derive(Debug)]
+#[cfg_attr(feature = "clone", derive(Clone))]
 pub struct Single<T>
 where
     T: Serialize + DeserializeOwned,

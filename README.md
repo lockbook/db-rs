@@ -89,6 +89,11 @@ the transaction completes and written once to disk.
 -   The database offers no tools at the moment to define integrity constraints beyond what the Rust type system implicitly
     enforces (non-null for instance). At the moment for us, this is simply an application side concern.
 
+### Features
+
+`clone` - derive clone on all table types. Consistency between cloned database is not provided.
+Useful in testing situations.
+
 ### Used by
 
 -   [Lockbook](https://github.com/lockbook/lockbook)
