@@ -20,15 +20,15 @@ fn test_simple() {
 
     let mut db = SingleSchema::init(Config::in_folder(dir)).unwrap();
     db.table1.insert(5).unwrap();
-    assert_eq!(db.table1.data(), Some(&5));
+    assert_eq!(db.table1.get(), Some(&5));
 
     let mut db = SingleSchema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table1.data(), Some(&5));
+    assert_eq!(db.table1.get(), Some(&5));
     assert_eq!(db.table1.clear().unwrap(), Some(5));
-    assert_eq!(db.table1.data(), None);
+    assert_eq!(db.table1.get(), None);
 
     let db = SingleSchema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table1.data(), None);
+    assert_eq!(db.table1.get(), None);
 
     drop(remove_dir_all(dir));
 }
@@ -49,11 +49,11 @@ fn test_complex() {
         .unwrap();
 
     let db = SingleSchema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table1.data().unwrap(), &5);
-    assert_eq!(db.table2.data().unwrap(), &("test".to_string()));
-    assert_eq!(db.table3.data().unwrap(), &u32::MAX);
-    assert_eq!(db.table4.data().unwrap(), &"--offline test --color=always --test single_tests test_simple --no-fail-fast --manifest-path /Users/parth/Documents/db-rs/db/Cargo.toml -- --format=json --exact -Z unstable-options --show-output".bytes().collect::<Vec<u8>>());
-    assert_eq!(db.table5.data().unwrap(), &PathBuf::from("/test/test/test/test/"));
+    assert_eq!(db.table1.get().unwrap(), &5);
+    assert_eq!(db.table2.get().unwrap(), &("test".to_string()));
+    assert_eq!(db.table3.get().unwrap(), &u32::MAX);
+    assert_eq!(db.table4.get().unwrap(), &"--offline test --color=always --test single_tests test_simple --no-fail-fast --manifest-path /Users/parth/Documents/db-rs/db/Cargo.toml -- --format=json --exact -Z unstable-options --show-output".bytes().collect::<Vec<u8>>());
+    assert_eq!(db.table5.get().unwrap(), &PathBuf::from("/test/test/test/test/"));
 
     drop(remove_dir_all(dir));
 }

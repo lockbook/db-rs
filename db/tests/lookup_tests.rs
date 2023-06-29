@@ -21,7 +21,7 @@ fn test() {
     drop(db);
 
     let db = LookupSchema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table1.data().get(&5).unwrap(), "test");
+    assert_eq!(db.table1.get().get(&5).unwrap(), "test");
     drop(fs::remove_dir_all(dir));
 }
 
@@ -40,9 +40,9 @@ fn test2() {
     drop(db);
 
     let db = LookupSchema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table1.data().get(&1).unwrap(), "test1");
-    assert_eq!(db.table1.data().get(&2).unwrap(), "tes2");
-    assert_eq!(db.table1.data().get(&3).unwrap(), "test3");
-    assert_eq!(db.table1.data().get(&5).unwrap(), "test5");
+    assert_eq!(db.table1.get().get(&1).unwrap(), "test1");
+    assert_eq!(db.table1.get().get(&2).unwrap(), "tes2");
+    assert_eq!(db.table1.get().get(&3).unwrap(), "test3");
+    assert_eq!(db.table1.get().get(&5).unwrap(), "test5");
     drop(fs::remove_dir_all(dir));
 }

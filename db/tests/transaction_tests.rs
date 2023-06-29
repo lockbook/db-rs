@@ -16,16 +16,16 @@ fn simple_tx() {
     let mut db = TxTest::init(Config::in_folder(dir)).unwrap();
     let tx = db.begin_transaction();
     db.table.insert(43, "test".to_string()).unwrap();
-    assert_eq!(db.table.data().get(&43), Some(&"test".to_string()));
+    assert_eq!(db.table.get().get(&43), Some(&"test".to_string()));
 
     {
         let db = TxTest::init(Config::in_folder(dir)).unwrap();
-        assert_eq!(db.table.data().get(&43), None);
+        assert_eq!(db.table.get().get(&43), None);
     }
     drop(tx);
     {
         let db = TxTest::init(Config::in_folder(dir)).unwrap();
-        assert_eq!(db.table.data().get(&43), Some(&"test".to_string()));
+        assert_eq!(db.table.get().get(&43), Some(&"test".to_string()));
     }
 
     drop(remove_dir_all(dir));
@@ -67,8 +67,8 @@ fn tx_log_corrupt() {
     file.write_all(&buf).unwrap();
 
     let db = TxTest::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table.data().get(&41), Some(&"test".to_string()));
-    assert_eq!(db.table.data().get(&43), None);
+    assert_eq!(db.table.get().get(&41), Some(&"test".to_string()));
+    assert_eq!(db.table.get().get(&43), None);
 
     drop(remove_dir_all(dir));
 }
@@ -106,6 +106,6 @@ fn snapshot_inter() {
     file.write_all(&buf).unwrap();
 
     let db = TxTest::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(db.table.data().get(&1), None);
+    assert_eq!(db.table.get().get(&1), None);
     drop(remove_dir_all(dir));
 }

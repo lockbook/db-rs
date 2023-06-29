@@ -20,7 +20,7 @@ impl CancelSig {
 
 pub trait BackgroundCompacter {
     /// Periodically compact the database log in a separate thread
-    /// You can call this function if your db is wrapped in an Arc<Mutex>
+    /// You can call this function if your db is wrapped in an `Arc<Mutex>`
     ///
     /// freq determines how often the background thread will aquire a mutex
     /// and call compact_log() on your db

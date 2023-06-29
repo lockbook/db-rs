@@ -1,14 +1,27 @@
 use crate::errors::{DbError, DbResult};
 use std::path::{Path, PathBuf};
 
+/// db-rs's config that describes where the log file should be and how the database should behave.
+/// use [Config::in_folder] as a starting point.
 #[derive(Clone, Debug)]
 pub struct Config {
+    /// folder where db-rs can write it's log
     pub path: PathBuf,
-    pub schema_name: Option<String>,
+
+    /// should db-rs create parent folders that don't exist? Default: true
     pub create_path: bool,
+
+    /// should db-rs create a log if one doesn't exist? Default: true
     pub create_db: bool,
+
+    /// should db-rs only read and not write? (good for analysis tooling) Default: false
     pub read_only: bool,
+
+    /// should db-rs avoid all IO? (good for tests) Default: false
     pub no_io: bool,
+
+    #[doc(hidden)]
+    pub schema_name: Option<String>,
 }
 
 impl Config {

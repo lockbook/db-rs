@@ -5,6 +5,7 @@ use crate::TableId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+/// A table which stores 0 or 1 values -- backed by [Option]
 #[derive(Debug)]
 pub struct Single<T>
 where
@@ -55,7 +56,7 @@ where
         Ok(ret)
     }
 
-    pub fn data(&self) -> Option<&T> {
+    pub fn get(&self) -> Option<&T> {
         self.inner.as_ref()
     }
 

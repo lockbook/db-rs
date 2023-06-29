@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
 
+/// A table backed by a [HashMap] of type `K`, `V`
 #[derive(Debug)]
 pub struct LookupTable<K, V>
 where
@@ -85,7 +86,7 @@ where
         Ok(ret)
     }
 
-    pub fn data(&self) -> &HashMap<K, V> {
+    pub fn get(&self) -> &HashMap<K, V> {
         &self.inner
     }
 

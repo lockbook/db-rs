@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
 
+/// A special case of [crate::lookup::LookupTable] where the value of the [HashMap] is a `Vec<V>`.
+#[derive(Debug)]
 pub struct LookupList<K, V>
 where
     K: Hash + Eq + Serialize,
@@ -119,7 +121,7 @@ where
         }
     }
 
-    pub fn data(&self) -> &HashMap<K, Vec<V>> {
+    pub fn get(&self) -> &HashMap<K, Vec<V>> {
         &self.inner
     }
 
