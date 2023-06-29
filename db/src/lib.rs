@@ -18,8 +18,8 @@
 //! Add the following to your `Cargo.toml`:
 //!
 //! ```toml
-//! db-rs = "0.2.0"
-//! db-rs-derive = "0.2.0"
+//! db-rs = "0.2.1"
+//! db-rs-derive = "0.2.1"
 //! ```
 //!
 //! Define your schema:
