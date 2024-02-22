@@ -161,7 +161,7 @@ impl Logger {
     pub fn log_entry(id: TableId, mut data: Vec<u8>) -> Vec<u8> {
         let header = Self::header(id, &data);
         data.reserve(header.len());
-        data.splice(0..0, header.into_iter());
+        data.splice(0..0, header);
         data
     }
 
