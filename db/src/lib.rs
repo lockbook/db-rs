@@ -114,6 +114,7 @@ pub use crate::single::Single;
 
 pub mod compacter;
 pub mod config;
+pub mod cooperative;
 pub mod db;
 pub mod errors;
 pub mod list;

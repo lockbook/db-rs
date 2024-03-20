@@ -1,5 +1,3 @@
-use fs2::FileExt;
-
 use crate::config::Config;
 use crate::errors::DbResult;
 use crate::{ByteCount, TableId};
@@ -105,11 +103,6 @@ impl Logger {
     pub fn begin_tx(&self) -> DbResult<TxHandle> {
         let h = TxHandle { inner: self.clone() };
         let mut inner = self.inner.lock()?;
-        if !inner.config.no_io && inner.config.cooperative {
-            if let Some(file) = &inner.file {
-                file.lock_exclusive()?;
-            }
-        }
 
         if inner.tx_data.is_none() {
             inner.tx_data = Some(vec![]);
@@ -126,12 +119,6 @@ impl Logger {
 
         inner.current_txs -= 1;
         if inner.current_txs == 0 {
-            if !inner.config.no_io && inner.config.cooperative {
-                if let Some(file) = &inner.file {
-                    file.unlock()?;
-                }
-            }
-
             let data = inner.tx_data.take();
             drop(inner);
             if let Some(data) = data {
@@ -154,22 +141,9 @@ impl Logger {
             return Ok(());
         }
 
-        if inner.config.cooperative {
-            if let Some(file) = &inner.file {
-                file.lock_exclusive()?;
-            }
-        }
-
         drop(inner);
 
         self.write_to_file(Self::log_entry(id, data))?;
-
-        let inner = self.inner.lock()?;
-        if inner.config.cooperative {
-            if let Some(file) = &inner.file {
-                file.unlock()?;
-            }
-        }
 
         Ok(())
     }
