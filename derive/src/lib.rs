@@ -39,31 +39,32 @@ pub fn schema(input: TokenStream) -> TokenStream {
     let ids: Vec<u8> = (1..(idents.len() + 1) as u8).collect();
 
     let output = quote! {
+        use db_rs::table::Table;
+        use db_rs::TableId;
 
         impl db_rs::Db for #ident {
-            fn init(mut config: db_rs::Config) -> db_rs::DbResult<Self> {
-                use db_rs::table::Table;
 
-                let schema_name = stringify!(#ident);
-                config.schema_name = Some(schema_name.to_string());
+            fn schema_name() -> &'static str {
+                stringify!(#ident)
+            }
+
+            fn init_tables(config: db_rs::Config) -> db_rs::DbResult<Self> {
                 let mut log = db_rs::Logger::init(config)?;
-                let log_data = log.get_bytes()?;
-                let log_entries = log.get_entries(&log_data)?;
 
                 #( let mut #idents = <#types>::init(#ids, log.clone()); )*
-
-                for entry in log_entries {
-                    match entry.table_id {
-                        #( #ids => #idents.handle_event(entry.bytes)?, )*
-                        _ => todo!()
-                    }
-                }
 
                 Ok(
                     Self {
                         #( #idents, )*
                     }
                 )
+            }
+
+            fn handle_event(&mut self, table_id: TableId, data: &[u8]) -> db_rs::DbResult<()> {
+                match table_id {
+                    #( #ids => self.#idents.handle_event(data), )*
+                    _ => todo!()
+                }
             }
 
             fn compact_log(&mut self) -> db_rs::DbResult<()> {

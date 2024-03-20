@@ -103,6 +103,7 @@ impl Logger {
     pub fn begin_tx(&self) -> DbResult<TxHandle> {
         let h = TxHandle { inner: self.clone() };
         let mut inner = self.inner.lock()?;
+
         if inner.tx_data.is_none() {
             inner.tx_data = Some(vec![]);
         }
@@ -142,7 +143,9 @@ impl Logger {
 
         drop(inner);
 
-        self.write_to_file(Self::log_entry(id, data))
+        self.write_to_file(Self::log_entry(id, data))?;
+
+        Ok(())
     }
 
     fn write_to_file(&self, data: Vec<u8>) -> DbResult<()> {

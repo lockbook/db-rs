@@ -20,6 +20,11 @@ pub struct Config {
     /// should db-rs avoid all IO? (good for tests) Default: false
     pub no_io: bool,
 
+    /// use file-locks to allow multiple processes to write to the log at the same time
+    /// will also monitor the log for changes and update in memory indexes accordingly
+    /// will notify host application if indexes change through another process
+    pub cooperative: bool,
+
     #[doc(hidden)]
     pub schema_name: Option<String>,
 }
@@ -33,6 +38,7 @@ impl Config {
             create_db: true,
             read_only: false,
             no_io: false,
+            cooperative: false,
         }
     }
 
@@ -44,6 +50,7 @@ impl Config {
             create_db: false,
             read_only: true,
             no_io: true,
+            cooperative: false,
         }
     }
 

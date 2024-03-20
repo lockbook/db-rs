@@ -19,15 +19,18 @@ fn test_simple() {
     drop(remove_dir_all(dir));
 
     let mut db = SingleSchema::init(Config::in_folder(dir)).unwrap();
+    let mut db = db.lock().unwrap();
     db.table1.insert(5).unwrap();
     assert_eq!(db.table1.get(), Some(&5));
 
     let mut db = SingleSchema::init(Config::in_folder(dir)).unwrap();
+    let mut db = db.lock().unwrap();
     assert_eq!(db.table1.get(), Some(&5));
     assert_eq!(db.table1.clear().unwrap(), Some(5));
     assert_eq!(db.table1.get(), None);
 
     let db = SingleSchema::init(Config::in_folder(dir)).unwrap();
+    let mut db = db.lock().unwrap();
     assert_eq!(db.table1.get(), None);
 
     drop(remove_dir_all(dir));
@@ -40,6 +43,7 @@ fn test_complex() {
     drop(remove_dir_all(dir));
 
     let mut db = SingleSchema::init(Config::in_folder(dir)).unwrap();
+    let mut db = db.lock().unwrap();
     db.table1.insert(5).unwrap();
     db.table2.insert("test".to_string()).unwrap();
     db.table3.insert(u32::MAX).unwrap();
@@ -49,6 +53,7 @@ fn test_complex() {
         .unwrap();
 
     let db = SingleSchema::init(Config::in_folder(dir)).unwrap();
+    let mut db = db.lock().unwrap();
     assert_eq!(db.table1.get().unwrap(), &5);
     assert_eq!(db.table2.get().unwrap(), &("test".to_string()));
     assert_eq!(db.table3.get().unwrap(), &u32::MAX);
