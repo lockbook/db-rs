@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::errors::DbResult;
 use crate::{ByteCount, TableId};
+use fs2::FileExt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -28,6 +29,7 @@ struct LoggerInner {
 impl Logger {
     pub fn init(config: Config) -> DbResult<Self> {
         if config.create_path {
+            // todo: is this happening for no_io?
             fs::create_dir_all(&config.path)?;
         }
 
@@ -185,11 +187,21 @@ impl Logger {
     }
 
     fn open_file(config: &Config, db_location: &Path) -> DbResult<File> {
-        Ok(OpenOptions::new()
+        let file = OpenOptions::new()
             .read(true)
             .create(config.create_db || config.read_only)
             .append(!config.read_only)
-            .open(db_location)?)
+            .open(db_location)?;
+
+        if config.fs_locks {
+            if config.fs_locks_block {
+                file.lock_exclusive()?;
+            } else {
+                file.try_lock_exclusive()?;
+            }
+        }
+
+        Ok(file)
     }
 
     pub(crate) fn config(&self) -> DbResult<Config> {
@@ -198,6 +210,18 @@ impl Logger {
 
     pub(crate) fn incomplete_write(&self) -> DbResult<bool> {
         Ok(self.inner.lock()?.incomplete_write)
+    }
+}
+
+impl Drop for LoggerInner {
+    fn drop(&mut self) {
+        if let Some(file) = &self.file {
+            if self.config.fs_locks {
+                if let Err(e) = file.unlock() {
+                    eprintln!("failed to unlock log lock: {:?}", e);
+                }
+            }
+        }
     }
 }
 
