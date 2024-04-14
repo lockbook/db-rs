@@ -32,6 +32,7 @@ fn log_compaction() {
     db.table1.clear().unwrap();
     db.compact_log().unwrap();
     assert!(log_size(&db) < (256 * (128 / 8)) + 1 + 4 + 100);
+    drop(db);
 
     let db = LogTests::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.table1.get().get(&4), None);

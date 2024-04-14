@@ -12,19 +12,21 @@ struct TxTest {
 fn simple_tx() {
     let dir = "/tmp/g";
     drop(remove_dir_all(dir));
+    let mut cfg = Config::in_folder(dir);
+    cfg.fs_locks = false;
 
-    let mut db = TxTest::init(Config::in_folder(dir)).unwrap();
+    let mut db = TxTest::init(cfg.clone()).unwrap();
     let tx = db.begin_transaction();
     db.table.insert(43, "test".to_string()).unwrap();
     assert_eq!(db.table.get().get(&43), Some(&"test".to_string()));
 
     {
-        let db = TxTest::init(Config::in_folder(dir)).unwrap();
+        let db = TxTest::init(cfg.clone()).unwrap();
         assert_eq!(db.table.get().get(&43), None);
     }
     drop(tx);
     {
-        let db = TxTest::init(Config::in_folder(dir)).unwrap();
+        let db = TxTest::init(cfg.clone()).unwrap();
         assert_eq!(db.table.get().get(&43), Some(&"test".to_string()));
     }
 

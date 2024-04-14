@@ -289,6 +289,7 @@ impl LogMetadata {
 impl Drop for LoggerInner {
     fn drop(&mut self) {
         if let Some(file) = &self.file {
+            println!("trying to drop");
             if self.config.fs_locks {
                 if let Err(e) = file.unlock() {
                     eprintln!("failed to unlock log lock: {:?}", e);

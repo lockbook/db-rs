@@ -85,6 +85,7 @@ fn test3() {
     assert!(db.table1.get().get(&1).is_some());
     assert!(db.table1.get().get(&1).unwrap().is_empty());
 
+    drop(db);
     let db = LookupSchema::init(Config::in_folder(dir)).unwrap();
     assert!(db.table1.get().get(&1).is_some());
     assert!(db.table1.get().get(&1).unwrap().is_empty());

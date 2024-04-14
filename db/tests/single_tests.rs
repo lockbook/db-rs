@@ -22,11 +22,13 @@ fn test_simple() {
     db.table1.insert(5).unwrap();
     assert_eq!(db.table1.get(), Some(&5));
 
+    drop(db);
     let mut db = SingleSchema::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.table1.get(), Some(&5));
     assert_eq!(db.table1.clear().unwrap(), Some(5));
     assert_eq!(db.table1.get(), None);
 
+    drop(db);
     let db = SingleSchema::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.table1.get(), None);
 
@@ -48,6 +50,7 @@ fn test_complex() {
         .insert(PathBuf::from("/test/test/test/test/"))
         .unwrap();
 
+    drop(db);
     let db = SingleSchema::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.table1.get().unwrap(), &5);
     assert_eq!(db.table2.get().unwrap(), &("test".to_string()));
