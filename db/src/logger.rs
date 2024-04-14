@@ -181,11 +181,23 @@ impl Logger {
         let final_path = inner.config.db_location()?;
 
         let mut file = Self::open_file(&inner.config, &temp_path)?;
-        let data = Self::log_entry(0, data);
-        file.write_all(&data)?;
 
+        // write compaction count for future IPC reasons
+        let mut log_meta = inner
+            .log_metadata
+            .ok_or(DbError::Unexpected("log meta missing -- no_io == false"))?;
+        log_meta.compaction_count += 1;
+        let metadata_bytes = log_meta.to_bytes();
+        file.write_all(&metadata_bytes)?;
+
+        // write compacted data to a temporary file
+        let compacted_data = Self::log_entry(0, data);
+        file.write_all(&compacted_data)?;
+
+        // atomically make this the new log
         fs::rename(temp_path, final_path)?;
         inner.file = Some(file);
+        inner.log_metadata = Some(log_meta);
 
         Ok(())
     }
@@ -265,7 +277,7 @@ pub struct LogMetadata {
 }
 
 impl LogMetadata {
-    fn to_bytes(&self) -> [u8; 2] {
+    fn to_bytes(self) -> [u8; 2] {
         [self.log_version, self.compaction_count]
     }
 
