@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::errors::DbResult;
-use crate::{ByteCount, TableId};
+use crate::{ByteCount, DbError, TableId};
 use fs2::FileExt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
@@ -21,6 +21,7 @@ pub struct Logger {
 struct LoggerInner {
     config: Config,
     file: Option<File>,
+    log_metadata: Option<LogMetadata>,
     incomplete_write: bool,
     current_txs: usize,
     tx_data: Option<Vec<u8>>,
@@ -33,7 +34,7 @@ impl Logger {
             fs::create_dir_all(&config.path)?;
         }
 
-        let file = if config.no_io {
+        let mut file = if config.no_io {
             None
         } else {
             Some(Self::open_file(&config, &config.db_location()?)?)
@@ -43,12 +44,15 @@ impl Logger {
         let tx_data = None;
         let current_txs = 0;
 
+        let log_metadata = Self::read_or_stamp_metadata(&config, &mut file)?;
+
         let inner = Arc::new(Mutex::new(LoggerInner {
             file,
             config,
             incomplete_write,
             tx_data,
             current_txs,
+            log_metadata,
         }));
 
         Ok(Self { inner })
@@ -210,6 +214,63 @@ impl Logger {
 
     pub(crate) fn incomplete_write(&self) -> DbResult<bool> {
         Ok(self.inner.lock()?.incomplete_write)
+    }
+
+    fn read_or_stamp_metadata(
+        config: &Config, file: &mut Option<File>,
+    ) -> DbResult<Option<LogMetadata>> {
+        match file {
+            Some(file) => {
+                let mut buffer = [0_u8; 2];
+                let bytes_read = file.read(&mut buffer)?;
+                let mut needs_stamp = false;
+                match bytes_read {
+                    0 => {
+                        needs_stamp = true;
+                        buffer = LogMetadata { log_version: 1, compaction_count: 0 }.to_bytes();
+                    }
+                    2 => {}
+                    _ => {
+                        return Err(DbError::Unexpected(
+                            "Unexpected amount of bytes read from log stamp",
+                        ))
+                    }
+                };
+
+                if !config.read_only && needs_stamp {
+                    file.write_all(&buffer)?;
+                }
+                let meta = LogMetadata::from_bytes(buffer);
+                if meta.log_version != 1 {
+                    return Err(DbError::Unexpected("unexpected log format version found"));
+                }
+
+                Ok(Some(meta))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LogMetadata {
+    /// knowing the log version that we're reading allows us to evolve the format and make breaking
+    /// changes. At the very least, allows us to return an error in the event of a version mismatch
+    /// (leaving the migration up to the client)
+    log_version: u8,
+
+    /// compaction count is going to be a key data point to read when there are multiple processes
+    /// reading and operating on the same log
+    compaction_count: u8,
+}
+
+impl LogMetadata {
+    fn to_bytes(&self) -> [u8; 2] {
+        [self.log_version, self.compaction_count]
+    }
+
+    fn from_bytes(bytes: [u8; 2]) -> Self {
+        Self { log_version: bytes[0], compaction_count: bytes[1] }
     }
 }
 
