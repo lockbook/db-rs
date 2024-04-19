@@ -64,7 +64,16 @@ impl Config {
         Self { path: PathBuf::from(p.as_ref()), ..Self::base() }
     }
 
-    pub fn db_location(&self) -> DbResult<PathBuf> {
+    pub fn db_location_v2(&self) -> DbResult<PathBuf> {
+        let name = self.schema_name.as_ref().ok_or(DbError::Unexpected(
+            "Schema name not populated! db-rs-derive should have done this",
+        ))?;
+        let mut pathbuf = self.path.clone();
+        pathbuf.push(format!("{name}.db"));
+        Ok(pathbuf)
+    }
+
+    pub fn db_location_v1(&self) -> DbResult<PathBuf> {
         let name = self.schema_name.as_ref().ok_or(DbError::Unexpected(
             "Schema name not populated! db-rs-derive should have done this",
         ))?;
@@ -78,7 +87,7 @@ impl Config {
             "Schema name not populated! db-rs-derive should have done this",
         ))?;
         let mut pathbuf = self.path.clone();
-        pathbuf.push(format!("{name}.tmp"));
+        pathbuf.push(format!("{name}.db.tmp"));
         Ok(pathbuf)
     }
 }

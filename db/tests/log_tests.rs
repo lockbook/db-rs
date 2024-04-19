@@ -1,7 +1,7 @@
 use db_rs::compacter::BackgroundCompacter;
 use db_rs::{CancelSig, Config, Db, LookupTable, Single};
 use db_rs_derive::Schema;
-use std::fs::{remove_dir_all, remove_file, OpenOptions};
+use std::fs::{remove_dir_all, OpenOptions};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -61,20 +61,21 @@ fn inter_log() {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(db.config().unwrap().db_location().unwrap())
+        .open(db.config().unwrap().db_location_v2().unwrap())
         .unwrap();
 
     file.read_to_end(&mut buf).unwrap();
 
     buf = buf[0..1000].to_vec();
-    remove_file(db.config().unwrap().db_location().unwrap()).unwrap();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(db.config().unwrap().db_location().unwrap())
+        .truncate(true)
+        .open(db.config().unwrap().db_location_v2().unwrap())
         .unwrap();
     file.write_all(&buf).unwrap();
 
+    drop(db);
     let db = LogTests::init(Config::in_folder(dir)).unwrap();
     assert!(db.incomplete_write().unwrap());
     assert_eq!(db.table1.get().get(&0).unwrap(), "0 * 0 = 0");
@@ -108,7 +109,7 @@ fn log_size<D: Db>(db: &D) -> usize {
     let mut buf = vec![];
     OpenOptions::new()
         .read(true)
-        .open(db.config().unwrap().db_location().unwrap())
+        .open(db.config().unwrap().db_location_v2().unwrap())
         .unwrap()
         .read_to_end(&mut buf)
         .unwrap();

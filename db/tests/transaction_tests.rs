@@ -1,6 +1,6 @@
 use db_rs::{Config, Db, LookupTable};
 use db_rs_derive::Schema;
-use std::fs::{remove_dir_all, remove_file, OpenOptions};
+use std::fs::{remove_dir_all, OpenOptions};
 use std::io::{Read, Write};
 
 #[derive(Schema)]
@@ -54,20 +54,21 @@ fn tx_log_corrupt() {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(db.config().unwrap().db_location().unwrap())
+        .open(db.config().unwrap().db_location_v2().unwrap())
         .unwrap();
     file.read_to_end(&mut buf).unwrap();
 
     buf = buf[0..buf.len() / 2].to_vec();
 
-    remove_file(db.config().unwrap().db_location().unwrap()).unwrap();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(db.config().unwrap().db_location().unwrap())
+        .truncate(true)
+        .open(db.config().unwrap().db_location_v2().unwrap())
         .unwrap();
     file.write_all(&buf).unwrap();
 
+    drop(db);
     let db = TxTest::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.table.get().get(&41), Some(&"test".to_string()));
     assert_eq!(db.table.get().get(&43), None);
@@ -93,20 +94,21 @@ fn snapshot_inter() {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(db.config().unwrap().db_location().unwrap())
+        .open(db.config().unwrap().db_location_v2().unwrap())
         .unwrap();
     file.read_to_end(&mut buf).unwrap();
 
     buf = buf[0..buf.len() / 2].to_vec();
 
-    remove_file(db.config().unwrap().db_location().unwrap()).unwrap();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(db.config().unwrap().db_location().unwrap())
+        .truncate(true)
+        .open(db.config().unwrap().db_location_v2().unwrap())
         .unwrap();
     file.write_all(&buf).unwrap();
 
+    drop(db);
     let db = TxTest::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.table.get().get(&1), None);
     drop(remove_dir_all(dir));
