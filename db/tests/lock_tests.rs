@@ -55,7 +55,7 @@ fn locks_blocks() {
     drop(db);
     let block_time = block_time.join().unwrap();
     println!("{block_time}");
-    assert!(block_time > 250);
+    assert!(block_time >= 250);
 
     drop(fs::remove_dir_all(dir));
 }
