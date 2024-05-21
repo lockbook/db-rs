@@ -54,6 +54,7 @@ fn locks_blocks() {
     thread::sleep(Duration::from_millis(250));
     drop(db);
     let block_time = block_time.join().unwrap();
+    println!("{block_time}");
     assert!(block_time > 250);
 
     drop(fs::remove_dir_all(dir));
