@@ -217,14 +217,15 @@ impl Logger {
         }
 
         if v2.exists() {
-            return Err(DbError::Unexpected("Found v1 log alongside v2 log!"));
+            return Ok(());
         }
 
-        let v1_bytes = fs::read(v1)?;
+        let v1_bytes = fs::read(&v1)?;
         let mut v2_bytes = LogMetadata::default().to_bytes().to_vec();
         v2_bytes.extend(v1_bytes);
         fs::write(&v2_temp, v2_bytes)?;
         fs::rename(v2_temp, v2)?;
+        fs::remove_file(v1)?;
 
         Ok(())
     }
