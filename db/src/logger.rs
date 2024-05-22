@@ -1,9 +1,10 @@
 use crate::config::Config;
 use crate::errors::DbResult;
-use crate::{ByteCount, TableId};
+use crate::{ByteCount, DbError, TableId};
+use fs2::FileExt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 pub struct LogFormat<'a> {
@@ -20,6 +21,7 @@ pub struct Logger {
 struct LoggerInner {
     config: Config,
     file: Option<File>,
+    log_metadata: Option<LogMetadata>,
     incomplete_write: bool,
     current_txs: usize,
     tx_data: Option<Vec<u8>>,
@@ -28,18 +30,22 @@ struct LoggerInner {
 impl Logger {
     pub fn init(config: Config) -> DbResult<Self> {
         if config.create_path {
+            // todo: is this happening for no_io?
             fs::create_dir_all(&config.path)?;
         }
 
-        let file = if config.no_io {
+        let mut file = if config.no_io {
             None
         } else {
-            Some(Self::open_file(&config, &config.db_location()?)?)
+            Self::handle_migration(&config)?;
+            Some(Self::open_file(&config, &config.db_location_v2()?)?)
         };
 
         let incomplete_write = false;
         let tx_data = None;
         let current_txs = 0;
+
+        let log_metadata = Self::read_or_stamp_metadata(&config, &mut file)?;
 
         let inner = Arc::new(Mutex::new(LoggerInner {
             file,
@@ -47,6 +53,7 @@ impl Logger {
             incomplete_write,
             tx_data,
             current_txs,
+            log_metadata,
         }));
 
         Ok(Self { inner })
@@ -172,24 +179,73 @@ impl Logger {
         }
 
         let temp_path = inner.config.compaction_location()?;
-        let final_path = inner.config.db_location()?;
+        let final_path = inner.config.db_location_v2()?;
 
         let mut file = Self::open_file(&inner.config, &temp_path)?;
-        let data = Self::log_entry(0, data);
-        file.write_all(&data)?;
 
+        // write compaction count for future IPC reasons
+        let mut log_meta = inner
+            .log_metadata
+            .ok_or(DbError::Unexpected("log meta missing -- no_io == false"))?;
+        log_meta.compaction_count += 1;
+        let metadata_bytes = log_meta.to_bytes();
+        file.write_all(&metadata_bytes)?;
+
+        // write compacted data to a temporary file
+        let compacted_data = Self::log_entry(0, data);
+        file.write_all(&compacted_data)?;
+
+        // atomically make this the new log
         fs::rename(temp_path, final_path)?;
         inner.file = Some(file);
+        inner.log_metadata = Some(log_meta);
+
+        Ok(())
+    }
+
+    fn handle_migration(config: &Config) -> DbResult<()> {
+        let v1 = config.db_location_v1()?;
+        let v2 = config.db_location_v2()?;
+        let v2_temp = PathBuf::from(format!("{}.migration", v2.to_string_lossy()));
+
+        if !v1.exists() {
+            return Ok(());
+        }
+
+        if v2_temp.exists() {
+            fs::remove_file(&v2_temp)?;
+        }
+
+        if v2.exists() {
+            return Ok(());
+        }
+
+        let v1_bytes = fs::read(&v1)?;
+        let mut v2_bytes = LogMetadata::default().to_bytes().to_vec();
+        v2_bytes.extend(v1_bytes);
+        fs::write(&v2_temp, v2_bytes)?;
+        fs::rename(v2_temp, v2)?;
+        fs::remove_file(v1)?;
 
         Ok(())
     }
 
     fn open_file(config: &Config, db_location: &Path) -> DbResult<File> {
-        Ok(OpenOptions::new()
+        let file = OpenOptions::new()
             .read(true)
             .create(config.create_db || config.read_only)
             .append(!config.read_only)
-            .open(db_location)?)
+            .open(db_location)?;
+
+        if config.fs_locks {
+            if config.fs_locks_block {
+                file.lock_exclusive()?;
+            } else {
+                file.try_lock_exclusive()?;
+            }
+        }
+
+        Ok(file)
     }
 
     pub(crate) fn config(&self) -> DbResult<Config> {
@@ -198,6 +254,81 @@ impl Logger {
 
     pub(crate) fn incomplete_write(&self) -> DbResult<bool> {
         Ok(self.inner.lock()?.incomplete_write)
+    }
+
+    fn read_or_stamp_metadata(
+        config: &Config, file: &mut Option<File>,
+    ) -> DbResult<Option<LogMetadata>> {
+        match file {
+            Some(file) => {
+                let mut buffer = [0_u8; 2];
+                let bytes_read = file.read(&mut buffer)?;
+                let mut needs_stamp = false;
+                match bytes_read {
+                    0 => {
+                        needs_stamp = true;
+                        buffer = LogMetadata::default().to_bytes();
+                    }
+                    2 => {}
+                    _ => {
+                        return Err(DbError::Unexpected(
+                            "Unexpected amount of bytes read from log stamp",
+                        ))
+                    }
+                };
+
+                if !config.read_only && needs_stamp {
+                    file.write_all(&buffer)?;
+                }
+                let meta = LogMetadata::from_bytes(buffer);
+                if meta.log_version != 1 {
+                    return Err(DbError::Unexpected("unexpected log format version found"));
+                }
+
+                Ok(Some(meta))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LogMetadata {
+    /// knowing the log version that we're reading allows us to evolve the format and make breaking
+    /// changes. At the very least, allows us to return an error in the event of a version mismatch
+    /// (leaving the migration up to the client)
+    log_version: u8,
+
+    /// compaction count is going to be a key data point to read when there are multiple processes
+    /// reading and operating on the same log
+    compaction_count: u8,
+}
+
+impl Default for LogMetadata {
+    fn default() -> Self {
+        Self { log_version: 1, compaction_count: 0 }
+    }
+}
+
+impl LogMetadata {
+    fn to_bytes(self) -> [u8; 2] {
+        [self.log_version, self.compaction_count]
+    }
+
+    fn from_bytes(bytes: [u8; 2]) -> Self {
+        Self { log_version: bytes[0], compaction_count: bytes[1] }
+    }
+}
+
+impl Drop for LoggerInner {
+    fn drop(&mut self) {
+        if let Some(file) = &self.file {
+            if self.config.fs_locks {
+                if let Err(e) = file.unlock() {
+                    eprintln!("failed to unlock log lock: {:?}", e);
+                }
+            }
+        }
     }
 }
 

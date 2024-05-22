@@ -20,6 +20,12 @@ pub struct Config {
     /// should db-rs avoid all IO? (good for tests) Default: false
     pub no_io: bool,
 
+    /// should db-rs guard it's log file with a file lock? (good for CLIs) Default: true
+    pub fs_locks: bool,
+
+    /// if using fs_locks, should we block while trying to aquire a lock? Default: false
+    pub fs_locks_block: bool,
+
     #[doc(hidden)]
     pub schema_name: Option<String>,
 }
@@ -33,6 +39,8 @@ impl Config {
             create_db: true,
             read_only: false,
             no_io: false,
+            fs_locks: true,
+            fs_locks_block: false,
         }
     }
 
@@ -44,6 +52,8 @@ impl Config {
             create_db: false,
             read_only: true,
             no_io: true,
+            fs_locks: false,
+            fs_locks_block: false,
         }
     }
 
@@ -54,7 +64,16 @@ impl Config {
         Self { path: PathBuf::from(p.as_ref()), ..Self::base() }
     }
 
-    pub fn db_location(&self) -> DbResult<PathBuf> {
+    pub fn db_location_v2(&self) -> DbResult<PathBuf> {
+        let name = self.schema_name.as_ref().ok_or(DbError::Unexpected(
+            "Schema name not populated! db-rs-derive should have done this",
+        ))?;
+        let mut pathbuf = self.path.clone();
+        pathbuf.push(format!("{name}.db"));
+        Ok(pathbuf)
+    }
+
+    pub fn db_location_v1(&self) -> DbResult<PathBuf> {
         let name = self.schema_name.as_ref().ok_or(DbError::Unexpected(
             "Schema name not populated! db-rs-derive should have done this",
         ))?;
@@ -68,7 +87,7 @@ impl Config {
             "Schema name not populated! db-rs-derive should have done this",
         ))?;
         let mut pathbuf = self.path.clone();
-        pathbuf.push(format!("{name}.tmp"));
+        pathbuf.push(format!("{name}.db.tmp"));
         Ok(pathbuf)
     }
 }

@@ -17,6 +17,7 @@ fn list_test() {
     db.list1.push("a".to_string()).unwrap();
     assert_eq!(db.list1.get(), ["a"]);
 
+    drop(db);
     let db = Schema::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.list1.get(), ["a"]);
 
@@ -44,6 +45,7 @@ fn list_test2() {
     assert_eq!(db.list1.get(), ["a"]);
     assert_eq!(db.list2.get(), ["b", "c", "d"]);
     assert_eq!(db.list3.get(), ["e", "f", "g", "h", "i", "j"]);
+    drop(db);
 
     let db = Schema::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.list1.get(), ["a"]);
@@ -77,6 +79,7 @@ fn list_test3() {
     assert_eq!(db.list2.get(), ["b", "d"]);
     assert_eq!(db.list3.get(), ["e", "f", "g", "h"]);
 
+    drop(db);
     let db = Schema::init(Config::in_folder(dir)).unwrap();
     assert_eq!(db.list1.get(), ["a"]);
     assert_eq!(db.list2.get(), ["b", "d"]);
