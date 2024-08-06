@@ -30,7 +30,7 @@ pub enum LogEntry<K, V> {
 impl<K, V> Table for LookupList<K, V>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
-    V: Serialize + DeserializeOwned + Eq + Hash,
+    V: Serialize + DeserializeOwned + Eq,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
         Self { table_id, inner: HashMap::default(), logger }
@@ -83,7 +83,7 @@ where
 impl<K, V> LookupList<K, V>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
-    V: Serialize + DeserializeOwned + Eq + Hash,
+    V: Serialize + DeserializeOwned + Eq,
 {
     pub(crate) fn push_inner(&mut self, k: K, v: V) {
         if let Some(vec) = self.inner.get_mut(&k) {
