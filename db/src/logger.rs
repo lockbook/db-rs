@@ -329,7 +329,7 @@ impl Drop for LoggerInner {
     fn drop(&mut self) {
         if let Some(file) = &self.file {
             if self.config.fs_locks {
-                if let Err(e) = file.unlock() {
+                if let Err(e) = fs2::FileExt::unlock(file) {
                     eprintln!("failed to unlock log lock: {:?}", e);
                 }
             }
