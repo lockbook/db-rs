@@ -239,14 +239,17 @@ impl Logger {
             .append(!config.read_only)
             .open(db_location)?;
 
+        #[cfg(not(target_family = "wasm"))]
         if config.fs_locks {
             if config.fs_locks_block {
-                #[cfg(not(target_family = "wasm"))]
                 file.lock_exclusive()?;
             } else {
-                #[cfg(not(target_family = "wasm"))]
                 file.try_lock_exclusive()?;
             }
+        }
+        #[cfg(target_family = "wasm")]
+        if config.fs_locks {
+            return Err(DbError::Unexpected("File Locks are not supported on wasm"));
         }
 
         Ok(file)
@@ -324,11 +327,11 @@ impl LogMetadata {
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
 impl Drop for LoggerInner {
     fn drop(&mut self) {
         if let Some(file) = &self.file {
             if self.config.fs_locks {
+                #[cfg(not(target_family = "wasm"))]
                 if let Err(e) = fs2::FileExt::unlock(file) {
                     eprintln!("failed to unlock log lock: {:?}", e);
                 }
