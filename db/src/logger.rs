@@ -1,11 +1,13 @@
 use crate::config::Config;
 use crate::errors::DbResult;
 use crate::{ByteCount, DbError, TableId};
-use fs2::FileExt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+#[cfg(not(target_family = "wasm"))]
+use fs2::FileExt;
 
 pub struct LogFormat<'a> {
     pub table_id: TableId,
@@ -239,8 +241,10 @@ impl Logger {
 
         if config.fs_locks {
             if config.fs_locks_block {
+                #[cfg(not(target_family = "wasm"))]
                 file.lock_exclusive()?;
             } else {
+                #[cfg(not(target_family = "wasm"))]
                 file.try_lock_exclusive()?;
             }
         }
@@ -322,9 +326,10 @@ impl LogMetadata {
 
 impl Drop for LoggerInner {
     fn drop(&mut self) {
-        if let Some(file) = &self.file {
+        if let Some(_file) = &self.file {
             if self.config.fs_locks {
-                if let Err(e) = file.unlock() {
+                #[cfg(not(target_family = "wasm"))]
+                if let Err(e) = _file.unlock() {
                     eprintln!("failed to unlock log lock: {:?}", e);
                 }
             }
