@@ -324,12 +324,12 @@ impl LogMetadata {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl Drop for LoggerInner {
     fn drop(&mut self) {
-        if let Some(_file) = &self.file {
+        if let Some(file) = &self.file {
             if self.config.fs_locks {
-                #[cfg(not(target_family = "wasm"))]
-                if let Err(e) = _file.unlock() {
+                if let Err(e) = file.unlock() {
                     eprintln!("failed to unlock log lock: {:?}", e);
                 }
             }
