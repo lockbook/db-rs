@@ -26,7 +26,7 @@ pub fn schema(input: TokenStream) -> TokenStream {
     let last = &tables
         .iter()
         .map(|table| table.ident.as_ref().unwrap())
-        .last()
+        .next_back()
         .unwrap_or_else(|| panic!("No tables found!"));
 
     let max_tables = TableId::MAX - 1 as TableId;
