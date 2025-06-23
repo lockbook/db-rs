@@ -78,7 +78,7 @@ where
     }
 
     pub fn pop(&mut self) -> DbResult<Option<T>> {
-        let log_entry: LogEntry<()> = LogEntry::Remove(self.inner.len() - 1);
+        let log_entry: LogEntry<T> = LogEntry::Remove(self.inner.len() - 1);
         let data = bincode::serialize(&log_entry)?;
         let result = self.inner.pop();
 
@@ -87,12 +87,21 @@ where
     }
 
     pub fn remove(&mut self, index: usize) -> DbResult<T> {
-        let log_entry: LogEntry<usize> = LogEntry::Remove(index);
+        let log_entry: LogEntry<T> = LogEntry::Remove(index);
         let data = bincode::serialize(&log_entry)?;
         let result = self.inner.remove(index);
 
         self.logger.write(self.table_id, data)?;
         Ok(result)
+    }
+
+    pub fn clear(&mut self) -> DbResult<()> {
+        let log_entry: LogEntry<T> = LogEntry::Clear;
+        let data = bincode::serialize(&log_entry)?;
+        self.inner.clear();
+
+        self.logger.write(self.table_id, data)?;
+        Ok(())
     }
 
     pub fn get(&self) -> &[T] {
