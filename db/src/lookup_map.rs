@@ -133,7 +133,7 @@ where
         let log_entry = LogEntry::ClearKey::<&K1, K2, V>(k1);
         let data = bincode::serialize(&log_entry)?;
 
-        let ret = self.inner.remove(&k1);
+        let ret = self.inner.remove(k1);
 
         self.logger.write(self.table_id, data)?;
 
