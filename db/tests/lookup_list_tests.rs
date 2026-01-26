@@ -1,3 +1,4 @@
+use db_rs::utils::random_test_dir;
 use db_rs::Db;
 use db_rs::{Config, LookupList};
 use db_rs_derive::Schema;
@@ -14,7 +15,7 @@ pub struct LookupSchema {
 
 #[test]
 fn test() {
-    let dir = "/tmp/o/";
+    let dir = &random_test_dir();
     drop(fs::remove_dir_all(dir));
     let mut db = LookupSchema::init(Config::in_folder(dir)).unwrap();
     db.table1.push(5, "test".to_string()).unwrap();
@@ -28,7 +29,7 @@ fn test() {
 
 #[test]
 fn test2() {
-    let dir = "/tmp/p/";
+    let dir = &random_test_dir();
 
     drop(fs::remove_dir_all(dir));
     let mut db = LookupSchema::init(Config::in_folder(dir)).unwrap();
@@ -77,7 +78,7 @@ fn test2() {
 
 #[test]
 fn test3() {
-    let dir = "/tmp/q/";
+    let dir = &random_test_dir();
 
     drop(fs::remove_dir_all(dir));
     let mut db = LookupSchema::init(Config::in_folder(dir)).unwrap();

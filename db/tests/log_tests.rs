@@ -1,4 +1,5 @@
 use db_rs::compacter::BackgroundCompacter;
+use db_rs::utils::random_test_dir;
 use db_rs::{CancelSig, Config, Db, LookupTable, Single};
 use db_rs_derive::Schema;
 use std::fs::{remove_dir_all, OpenOptions};
@@ -15,7 +16,7 @@ pub struct LogTests {
 
 #[test]
 fn log_compaction() {
-    let dir = "/tmp/e";
+    let dir = &random_test_dir();
     drop(remove_dir_all(dir));
 
     let mut db = LogTests::init(Config::in_folder(dir)).unwrap();
@@ -43,7 +44,7 @@ fn log_compaction() {
 
 #[test]
 fn inter_log() {
-    let dir = "/tmp/f";
+    let dir = &random_test_dir();
     drop(remove_dir_all(dir));
 
     let mut db = LogTests::init(Config::in_folder(dir)).unwrap();
@@ -93,7 +94,7 @@ fn no_io_tests() {
 #[test]
 #[ignore] // ignored so tests don't get stuck here
 fn auto_log_compacter() {
-    let dir = "/tmp/fa";
+    let dir = &random_test_dir();
     drop(remove_dir_all(dir));
     let db = Arc::new(Mutex::new(LogTests::init(Config::in_folder(dir)).unwrap()));
     let cancel = CancelSig::default();

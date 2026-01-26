@@ -1,8 +1,8 @@
+use db_rs::utils::random_test_dir;
 use db_rs::{Config, Db, LookupTable};
 use db_rs_derive::Schema;
 use std::fs::{remove_dir_all, OpenOptions};
 use std::io::{Read, Write};
-
 #[derive(Schema)]
 struct TxTest {
     table: LookupTable<u8, String>,
@@ -10,7 +10,7 @@ struct TxTest {
 
 #[test]
 fn simple_tx() {
-    let dir = "/tmp/g";
+    let dir = &random_test_dir();
     drop(remove_dir_all(dir));
     let mut cfg = Config::in_folder(dir);
     cfg.fs_locks = false;
@@ -35,7 +35,7 @@ fn simple_tx() {
 
 #[test]
 fn tx_log_corrupt() {
-    let dir = "/tmp/h";
+    let dir = &random_test_dir();
     drop(remove_dir_all(dir));
 
     let mut db = TxTest::init(Config::in_folder(dir)).unwrap();
@@ -78,7 +78,7 @@ fn tx_log_corrupt() {
 
 #[test]
 fn snapshot_inter() {
-    let dir = "/tmp/i";
+    let dir = &random_test_dir();
     drop(remove_dir_all(dir));
 
     let mut db = TxTest::init(Config::in_folder(dir)).unwrap();

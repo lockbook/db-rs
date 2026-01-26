@@ -125,6 +125,7 @@ pub mod lookup_map;
 pub mod lookup_set;
 pub mod single;
 pub mod table;
+pub mod utils;
 
 pub type TableId = u8;
 pub type ByteCount = u32;
