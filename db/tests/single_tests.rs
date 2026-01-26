@@ -1,3 +1,4 @@
+use db_rs::utils::random_test_dir;
 use db_rs::{Config, Db, Single};
 use db_rs_derive::Schema;
 use std::fs::remove_dir_all;
@@ -14,7 +15,7 @@ pub struct SingleSchema {
 
 #[test]
 fn test_simple() {
-    let dir = "/tmp/c";
+    let dir = &random_test_dir();
 
     drop(remove_dir_all(dir));
 
@@ -37,7 +38,7 @@ fn test_simple() {
 
 #[test]
 fn test_complex() {
-    let dir = "/tmp/d";
+    let dir = &random_test_dir();
 
     drop(remove_dir_all(dir));
 

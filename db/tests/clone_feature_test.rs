@@ -3,7 +3,7 @@
 mod clone_feature {
     use std::fs;
 
-    use db_rs::*;
+    use db_rs::{utils::random_test_dir, *};
     use db_rs_derive::Schema;
 
     #[derive(Schema, Clone)]
@@ -17,7 +17,7 @@ mod clone_feature {
 
     #[test]
     fn test() {
-        let dir = "/tmp/o/";
+        let dir = &random_test_dir();
         drop(fs::remove_dir_all(dir));
         let mut db = CloneFT::init(Config::in_folder(dir)).unwrap();
         db.table1.insert(5, "test".to_string()).unwrap();

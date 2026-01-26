@@ -1,4 +1,4 @@
-use db_rs::{Config, Db, List};
+use db_rs::{utils::random_test_dir, Config, Db, List};
 use db_rs_derive::Schema;
 use std::fs;
 
@@ -11,7 +11,7 @@ struct Schema {
 
 #[test]
 fn list_test() {
-    let dir = "/tmp/j/";
+    let dir = &random_test_dir();
     drop(fs::remove_dir_all(dir));
     let mut db = Schema::init(Config::in_folder(dir)).unwrap();
     db.list1.push("a".to_string()).unwrap();
@@ -26,7 +26,7 @@ fn list_test() {
 
 #[test]
 fn list_test2() {
-    let dir = "/tmp/k/";
+    let dir = &random_test_dir();
     drop(fs::remove_dir_all(dir));
     let mut db = Schema::init(Config::in_folder(dir)).unwrap();
     db.list1.push("a".to_string()).unwrap();
@@ -56,7 +56,7 @@ fn list_test2() {
 
 #[test]
 fn list_test3() {
-    let dir = "/tmp/kk/";
+    let dir = &random_test_dir();
     drop(fs::remove_dir_all(dir));
     let mut db = Schema::init(Config::in_folder(dir)).unwrap();
     db.list1.push("a".to_string()).unwrap();
@@ -90,7 +90,7 @@ fn list_test3() {
 
 #[test]
 fn list_test_clear() {
-    let dir = "/tmp/kkk/";
+    let dir = &random_test_dir();
     drop(fs::remove_dir_all(dir));
     let mut db = Schema::init(Config::in_folder(dir)).unwrap();
     db.list1.push("a".to_string()).unwrap();
