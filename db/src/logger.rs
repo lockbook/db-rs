@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use fs2::FileExt;
 
 pub struct LogFormat<'a> {
+    pub index: usize,
     pub table_id: TableId,
     pub bytes: &'a [u8],
 }
@@ -77,7 +78,10 @@ impl Logger {
         let mut entries = vec![];
 
         while index < buffer.len() {
+            let index_capture = index + 2;
+            println!("{index}, {index_capture}");
             if buffer.len() < index + 4 + 1 {
+                eprintln!("size missing!");
                 self.inner.lock()?.incomplete_write = true;
                 return Ok(entries);
             }
@@ -93,16 +97,18 @@ impl Logger {
             index += 4;
 
             if buffer.len() < index + size {
+                eprintln!("expected {} found {}", index + size, buffer.len());
                 self.inner.lock()?.incomplete_write = true;
                 return Ok(entries);
             }
 
             if table_id == 0 {
+                println!("TABLE_ID == 0");
                 continue;
             }
 
             let bytes = &buffer[index..index + size];
-            entries.push(LogFormat { table_id, bytes });
+            entries.push(LogFormat { index: index_capture, table_id, bytes });
             index += size;
         }
 
