@@ -5,18 +5,19 @@ use crate::TableId;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::hash::{BuildHasher, Hash, RandomState};
 
 /// A table backed by a [HashMap] of type `K`, `V`
 #[derive(Debug)]
 #[cfg_attr(feature = "clone", derive(Clone))]
-pub struct LookupTable<K, V>
+pub struct LookupTable<K, V, S=RandomState>
 where
     K: Hash + Eq + Serialize,
     V: Serialize,
+    S: BuildHasher + Default
 {
     table_id: TableId,
-    inner: HashMap<K, V>,
+    inner: HashMap<K, V, S>,
     pub logger: Logger,
 }
 
@@ -27,13 +28,14 @@ pub enum LogEntry<K, V> {
     Clear,
 }
 
-impl<K, V> Table for LookupTable<K, V>
+impl<K, V, S> Table for LookupTable<K, V, S>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
+    S: BuildHasher + Default
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
-        Self { table_id, inner: HashMap::default(), logger }
+        Self { table_id, inner: HashMap::with_hasher(S::default()), logger }
     }
 
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
@@ -64,10 +66,11 @@ where
     }
 }
 
-impl<K, V> LookupTable<K, V>
+impl<K, V, S> LookupTable<K, V, S>
 where
     K: Hash + Eq + Serialize,
     V: Serialize,
+    S: BuildHasher + Default
 {
     pub fn insert(&mut self, key: K, value: V) -> DbResult<Option<V>> {
         let log_entry = LogEntry::Insert(&key, &value);
@@ -87,7 +90,7 @@ where
         Ok(ret)
     }
 
-    pub fn get(&self) -> &HashMap<K, V> {
+    pub fn get(&self) -> &HashMap<K, V, S> {
         &self.inner
     }
 

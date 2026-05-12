@@ -3,18 +3,18 @@ use crate::{DbResult, Logger, TableId};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::hash::{BuildHasher, Hash, RandomState};
 
 /// A special case of [crate::lookup::LookupTable] where the value of the [HashMap] is a `Vec<V>`.
 #[derive(Debug)]
 #[cfg_attr(feature = "clone", derive(Clone))]
-pub struct LookupList<K, V>
+pub struct LookupList<K, V, S=RandomState>
 where
     K: Hash + Eq + Serialize,
     V: Serialize + Eq,
 {
     table_id: TableId,
-    inner: HashMap<K, Vec<V>>,
+    inner: HashMap<K, Vec<V>, S>,
     pub logger: Logger,
 }
 
@@ -27,13 +27,15 @@ pub enum LogEntry<K, V> {
     Clear,
 }
 
-impl<K, V> Table for LookupList<K, V>
+impl<K, V, S> Table for LookupList<K, V, S>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned + Eq + Hash,
+    S: Default + BuildHasher
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
-        Self { table_id, inner: HashMap::default(), logger }
+        let inner = HashMap::with_hasher(S::default());
+        Self { table_id, inner, logger }
     }
 
     fn handle_event(&mut self, bytes: &[u8]) -> DbResult<()> {
@@ -80,10 +82,11 @@ where
     }
 }
 
-impl<K, V> LookupList<K, V>
+impl<K, V, S> LookupList<K, V, S>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned + Eq + Hash,
+    S: BuildHasher
 {
     pub(crate) fn push_inner(&mut self, k: K, v: V) {
         if let Some(vec) = self.inner.get_mut(&k) {
@@ -122,7 +125,7 @@ where
         }
     }
 
-    pub fn get(&self) -> &HashMap<K, Vec<V>> {
+    pub fn get(&self) -> &HashMap<K, Vec<V>, S> {
         &self.inner
     }
 
