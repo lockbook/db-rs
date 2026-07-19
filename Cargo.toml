@@ -1,8 +1,6 @@
-[workspace]
+[package]
+name = "db-rs"
+version = "0.1.0"
+edition = "2024"
 
-members = [
-	"db",
-	"derive",
-	"example",
-]
-
+[dependencies]
