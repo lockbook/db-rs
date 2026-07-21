@@ -4,12 +4,13 @@ pub trait Db {
 
 impl<V: Schema> Db for Shard<V> {
     fn start_db(&self, config: Config) {
+        let log = Log::init(&config);
         let events = self.log.get_events();
         let mut tables = self.view.write().unwrap();
         let mut tables = tables.stores();
 
         for e in events {
-            match tables.get_mut(e.table_id) {
+            match tables.get_mut(e.table_id as usize) {
                 Some(table) => table.handle_event(e),
                 None => todo!(),
             }

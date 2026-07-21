@@ -5,8 +5,8 @@ use crate::config::IpcProfile::Client;
 use crate::config::{Config, IoConfig};
 
 pub struct Event {
-    pub shard_id: usize,
-    pub table_id: usize,
+    pub shard_id: u32,
+    pub table_id: u32,
     pub data: Vec<u8>,
 }
 
@@ -41,7 +41,7 @@ impl Log {
 
         Ok(Self {
             file: Some(opts.open(io.log_path())?),
-            lock: lock,
+            lock,
         })
     }
 
@@ -69,9 +69,10 @@ impl Log {
         Ok(lock)
     }
 
-    fn append(&self, bytes: &Vec<u8>) {
-        
-    }
+    // todo: this needs to take an event, table needs to know it's id, perhaps also the shard id,
+    // tbd. Perhaps each logger knows this? Perhaps looger will be slightly different for each
+    // person who can write to the log?
+    pub fn append(&self, bytes: Vec<u8>) {}
 
     pub(crate) fn read_from_file(&self) -> io::Result<Vec<u8>> {
         let Some(mut file) = self.file.as_ref() else {

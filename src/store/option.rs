@@ -20,10 +20,14 @@ impl<T> SOption<T> {
 
 impl<T: Serialize> SOption<T> {
     /// Updates the in-memory view and returns the bytes destined for the log.
-    pub fn set(&mut self, value: Option<T>) -> Vec<u8> {
+    pub fn set(&mut self, value: Option<T>) -> Option<T> {
         let bytes = to_bytes(&value).unwrap();
+        if let Some( log) = &mut self.log {
+            log.append(bytes);
+        }
+        let old = self.data.take();
         self.data = value;
-        bytes
+        old
     }
 }
 
