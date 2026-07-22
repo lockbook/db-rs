@@ -9,6 +9,30 @@ use crate::config::{Config, IoConfig};
 const LOGGER_ID: usize = Id::MAX;
 
 pub(crate) struct Event {
+    pub seq_no: Id,
+    pub shard_id: Id,
+    pub table_id: Id,
+    pub data: Vec<u8>,
+}
+
+// we need to settle the log format now
+// we need some way to store seq numbers
+// should we just have a log record be sort of a marker in the log?
+// should the LogRecord re-use the idea of Event, just with it's own shard and table_id
+// and how can a table report it's own sequence number independent of the ones happening in txs
+// most importantly how do we re-produce those sequence numbers across invocations so people
+// can depend on them. Maybe that can be an idea maintained by the start_db and append. 
+// will we need an atomic? I think we do not because start db will do it for each table event it
+// comes across
+// and then appened can reference what? It will need to reference some atomic to figure out what the
+// current global seq no is for this log. So yes
+
+pub(crate) struct LogRecord {
+    pub seq: Id,
+    pub table: Vec<Payload>,
+}
+
+pub(crate) struct Payload {
     pub shard_id: Id,
     pub table_id: Id,
     pub data: Vec<u8>,
@@ -16,6 +40,7 @@ pub(crate) struct Event {
 
 #[derive(Clone)]
 pub struct Logger {
+    pub(crate) seq: Id,
     pub(crate) shard_id: Id,
     pub(crate) table_id: Id,
 
@@ -29,12 +54,14 @@ impl Default for Logger {
             shard_id: LOGGER_ID,
             table_id: LOGGER_ID,
             io: Default::default(),
+            seq: 0,
         }
     }
 }
 
 #[derive(Default)]
 pub struct Io {
+    pending_tx: Vec<Event>,
     file: Option<fs::File>,
     lock: Option<fs::File>,
 }
@@ -102,6 +129,10 @@ impl Logger {
         };
 
         
+    }
+
+    pub(crate) fn commit(&self) {
+        todo!()
     }
 
     pub(crate) fn read_from_file(&self) -> io::Result<Vec<u8>> {
