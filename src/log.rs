@@ -1,48 +1,73 @@
 use std::io::{Read, Seek, SeekFrom};
+use std::sync::{Arc, Mutex};
 use std::{fs, io};
 
+use crate::Id;
 use crate::config::IpcProfile::Client;
 use crate::config::{Config, IoConfig};
 
-pub struct Event {
-    pub shard_id: u32,
-    pub table_id: u32,
+const LOGGER_ID: usize = Id::MAX;
+
+pub(crate) struct Event {
+    pub shard_id: Id,
+    pub table_id: Id,
     pub data: Vec<u8>,
 }
 
+#[derive(Clone)]
+pub struct Logger {
+    pub(crate) shard_id: Id,
+    pub(crate) table_id: Id,
+
+    io: Arc<Mutex<Io>>,
+}
+
+// todo: aim to get rid of this
+impl Default for Logger {
+    fn default() -> Self {
+        Self {
+            shard_id: LOGGER_ID,
+            table_id: LOGGER_ID,
+            io: Default::default(),
+        }
+    }
+}
+
 #[derive(Default)]
-pub struct Log {
+pub struct Io {
     file: Option<fs::File>,
     lock: Option<fs::File>,
 }
 
-impl Log {
+impl Logger {
     pub(crate) fn init(config: &Config) -> io::Result<Self> {
-        let Some(io) = &config.io else {
-            return Ok(Self {
-                file: None,
-                lock: None,
-            });
+        let base = Self::default();
+        let Some(io_config) = &config.io else {
+            return Ok(base);
         };
 
-        fs::create_dir_all(&io.data_dir)?;
+        fs::create_dir_all(&io_config.data_dir)?;
 
-        let lock = if io.ipc_profile == Client {
-            Some(Self::acquire_lock(io)?)
+        let lock = if io_config.ipc_profile == Client {
+            Some(Self::acquire_lock(io_config)?)
         } else {
             None
         };
 
         let mut opts = fs::OpenOptions::new();
         opts.read(true);
-        if !io.read_only {
+        if !io_config.read_only {
             opts.append(true).create(true);
         }
 
-        Ok(Self {
-            file: Some(opts.open(io.log_path())?),
+        let file = opts.open(io_config.log_path())?;
+
+        *base.io.lock().unwrap() = Io {
+            file: Some(file),
             lock,
-        })
+        };
+
+        Ok(base)
     }
 
     fn acquire_lock(io: &IoConfig) -> io::Result<fs::File> {
@@ -69,13 +94,19 @@ impl Log {
         Ok(lock)
     }
 
-    // todo: this needs to take an event, table needs to know it's id, perhaps also the shard id,
-    // tbd. Perhaps each logger knows this? Perhaps looger will be slightly different for each
-    // person who can write to the log?
-    pub fn append(&self, bytes: Vec<u8>) {}
+    pub fn append(&self, data: Vec<u8>) {
+        let event = Event {
+            shard_id: self.shard_id,
+            table_id: self.table_id,
+            data,
+        };
+
+        
+    }
 
     pub(crate) fn read_from_file(&self) -> io::Result<Vec<u8>> {
-        let Some(mut file) = self.file.as_ref() else {
+        let binding = self.io.lock().unwrap();
+        let Some(mut file) = binding.file.as_ref() else {
             return Ok(Vec::new());
         };
 

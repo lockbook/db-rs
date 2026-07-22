@@ -29,7 +29,7 @@ fn main() {
     let app = CustomerApp::default();
 
     // this will actually read the log and populate your structures
-    app.db.start_db(Config {});
+    app.db.start_db(Config::default());
 
     // writes update the view and hand back the bytes for the log
     let log_entry = app

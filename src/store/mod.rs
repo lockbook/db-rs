@@ -6,9 +6,9 @@ pub trait Store {
     //     Box::new(self)
     // }
 
-    fn set_logger(&mut self, log: Log);
+    fn set_logger(&mut self, log: Logger);
 
-    fn handle_event(&mut self, e: Event);
+    fn handle_event(&mut self, e: &[u8]);
 }
 
 const BINCODE_CONFIG: Configuration = bincode::config::standard();
@@ -29,4 +29,4 @@ use bincode::{
 };
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::log::{Event, Log};
+use crate::log::Logger;

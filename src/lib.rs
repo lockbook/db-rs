@@ -1,27 +1,47 @@
+pub type Id = usize;
+
 pub trait Db {
     fn start_db(&self, config: Config);
+    fn write_tx(&self) -> TxGuard;
 }
 
 impl<V: Schema> Db for Shard<V> {
     fn start_db(&self, config: Config) {
-        let log = Log::init(&config);
+        let log = Logger::init(&config).unwrap();
         let events = self.log.get_events();
         let mut tables = self.view.write().unwrap();
         let mut tables = tables.stores();
 
+        for (idx, table) in tables.iter_mut().enumerate() {
+            let mut log = log.clone();
+            log.shard_id = self.id;
+            log.table_id = idx;
+            table.set_logger(log);
+        }
+
         for e in events {
-            match tables.get_mut(e.table_id as usize) {
-                Some(table) => table.handle_event(e),
+            match tables.get_mut(e.table_id) {
+                Some(table) => table.handle_event(&e.data),
                 None => todo!(),
             }
         }
     }
+
+    fn write_tx(&self) -> TxGuard {
+        TxGuard {
+            t: self.view.write().unwrap(),
+        }
+    }
 }
+
+pub struct TxGuard {}
 
 #[derive(Default)]
 pub struct Shard<V: Schema> {
-    log: Log,
     pub view: Arc<RwLock<V>>,
+
+    id: Id,
+    log: Logger,
 }
 
 pub trait Schema {
@@ -34,8 +54,4 @@ pub mod store;
 
 use std::sync::{Arc, RwLock};
 
-use crate::{
-    config::Config,
-    log::{Event, Log},
-    store::Store,
-};
+use crate::{config::Config, log::Logger, store::Store};

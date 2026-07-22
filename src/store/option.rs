@@ -2,13 +2,13 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    log::{Event, Log},
+    log::Logger,
     store::{Store, from_bytes, to_bytes},
 };
 
 #[derive(Default)]
 pub struct SOption<T> {
-    log: Option<Log>,
+    log: Logger,
     data: Option<T>,
 }
 
@@ -22,9 +22,7 @@ impl<T: Serialize> SOption<T> {
     /// Updates the in-memory view and returns the bytes destined for the log.
     pub fn set(&mut self, value: Option<T>) -> Option<T> {
         let bytes = to_bytes(&value).unwrap();
-        if let Some( log) = &mut self.log {
-            log.append(bytes);
-        }
+        self.log.append(bytes);
         let old = self.data.take();
         self.data = value;
         old
@@ -32,11 +30,11 @@ impl<T: Serialize> SOption<T> {
 }
 
 impl<T: DeserializeOwned + 'static> Store for SOption<T> {
-    fn handle_event(&mut self, e: Event) {
-        self.data = from_bytes(&e.data).unwrap();
+    fn handle_event(&mut self, data: &[u8]) {
+        self.data = from_bytes(data).unwrap();
     }
 
-    fn set_logger(&mut self, log: Log) {
-        self.log = Some(log);
+    fn set_logger(&mut self, log: Logger) {
+        self.log = log;
     }
 }
