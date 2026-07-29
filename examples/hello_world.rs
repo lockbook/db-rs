@@ -1,5 +1,5 @@
 use db_rs::{
-    Db, Schema, Shard,
+    Db, Schema, IpcDb,
     config::Config,
     store::{Store, option::SOption},
 };
@@ -7,7 +7,7 @@ use db_rs::{
 /// You have an app, it has a db
 #[derive(Default)]
 struct CustomerApp {
-    db: Shard<CustomerView>,
+    db: IpcDb<CustomerView>,
 }
 
 /// Describe the db in terms of it's in memory views

@@ -1,46 +1,52 @@
 use std::io::{Read, Seek, SeekFrom};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{fs, io};
 
 use crate::Id;
 use crate::config::IpcProfile::Client;
 use crate::config::{Config, IoConfig};
+use crate::errors::DbResult;
 
 const LOGGER_ID: usize = Id::MAX;
 
-pub(crate) struct Event {
-    pub seq_no: Id,
-    pub shard_id: Id,
-    pub table_id: Id,
-    pub data: Vec<u8>,
+pub(crate) struct LogEntry<'a> {
+    pub(crate) seq_no: Id,
+    pub(crate) payload: &'a [u8],
 }
 
-// we need to settle the log format now
-// we need some way to store seq numbers
-// should we just have a log record be sort of a marker in the log?
-// should the LogRecord re-use the idea of Event, just with it's own shard and table_id
-// and how can a table report it's own sequence number independent of the ones happening in txs
-// most importantly how do we re-produce those sequence numbers across invocations so people
-// can depend on them. Maybe that can be an idea maintained by the start_db and append. 
-// will we need an atomic? I think we do not because start db will do it for each table event it
-// comes across
-// and then appened can reference what? It will need to reference some atomic to figure out what the
-// current global seq no is for this log. So yes
-
-pub(crate) struct LogRecord {
-    pub seq: Id,
-    pub table: Vec<Payload>,
+pub struct TxEntry<'a> {
+    pub(crate) shard: Id,
+    pub(crate) table: Id,
+    pub(crate) payload: &'a [u8],
 }
 
-pub(crate) struct Payload {
-    pub shard_id: Id,
-    pub table_id: Id,
-    pub data: Vec<u8>,
+impl LogEntry<'_> {
+    pub fn head_entry( buf: &[u8]) -> (Option<LogEntry>, usize) {
+        todo!()
+    }
+}
+
+impl TxEntry<'_> {
+    pub fn head_entry(&self, buf: &[u8]) -> (Option<TxEntry>, usize) {
+        todo!()
+    }
+
+    fn write_to_buffer(&self, buf: &mut Vec<u8>) {
+        let shard = self.shard.to_be_bytes();
+        let table = self.table.to_be_bytes();
+
+        buf.reserve(shard.len() + table.len() + buf.len());
+        buf.extend_from_slice(&shard);
+        buf.extend_from_slice(&table);
+        buf.extend_from_slice(self.payload);
+    }
 }
 
 #[derive(Clone)]
 pub struct Logger {
-    pub(crate) seq: Id,
+    pub(crate) seq: Arc<AtomicUsize>,
+    pub(crate) table_seq: usize,
     pub(crate) shard_id: Id,
     pub(crate) table_id: Id,
 
@@ -54,20 +60,22 @@ impl Default for Logger {
             shard_id: LOGGER_ID,
             table_id: LOGGER_ID,
             io: Default::default(),
-            seq: 0,
+            seq: Default::default(),
+            table_seq: Default::default(),
         }
     }
 }
 
 #[derive(Default)]
 pub struct Io {
-    pending_tx: Vec<Event>,
+    pending_tx: Vec<u8>,
+    incomplete_write: bool,
     file: Option<fs::File>,
     lock: Option<fs::File>,
 }
 
 impl Logger {
-    pub(crate) fn init(config: &Config) -> io::Result<Self> {
+    pub(crate) fn init(config: &Config) -> DbResult<Self> {
         let base = Self::default();
         let Some(io_config) = &config.io else {
             return Ok(base);
@@ -92,6 +100,8 @@ impl Logger {
         *base.io.lock().unwrap() = Io {
             file: Some(file),
             lock,
+            pending_tx: Default::default(),
+            incomplete_write: false,
         };
 
         Ok(base)
@@ -121,14 +131,16 @@ impl Logger {
         Ok(lock)
     }
 
-    pub fn append(&self, data: Vec<u8>) {
-        let event = Event {
-            shard_id: self.shard_id,
-            table_id: self.table_id,
-            data,
+    pub fn append(&mut self, data: Vec<u8>) {
+        self.table_seq = self.seq.load(Ordering::SeqCst);
+        let event = TxEntry {
+            shard: self.shard_id,
+            table: self.table_id,
+            payload: &data,
         };
 
-        
+        let buffer = &mut self.io.lock().unwrap().pending_tx;
+        event.write_to_buffer(buffer);
     }
 
     pub(crate) fn commit(&self) {
@@ -147,7 +159,23 @@ impl Logger {
         Ok(buf)
     }
 
-    pub(crate) fn get_events(&self) -> Vec<Event> {
+    pub(crate) fn next_event<'a>(&self, offset: usize, buffer: &[u8]) -> (Option<TxEntry>, usize) {
+        todo!()
+    }
+}
+
+pub struct LogReader {
+    data: Vec<u8>,
+    current_offset: usize,
+    incomplete_log: bool,
+}
+
+impl LogReader {
+    fn next_event(&mut self) -> Option<TxEntry> {
+        if self.current_offset >= self.data.len() {
+            return None;
+        }
+
         todo!()
     }
 }

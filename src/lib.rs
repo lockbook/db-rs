@@ -5,38 +5,64 @@ pub trait Db {
     /// `write_tx`'s return can mention it without `Db` itself being generic.
     type View: Schema;
 
-    fn start_db(&self, config: Config);
+    fn start_db(&self, config: Config) -> DbResult<()>;
     fn write_tx(&self) -> TxGuard<'_, Self::View>;
 }
 
-impl<V: Schema> Db for Shard<V> {
+impl<V: Schema> Db for IpcDb<V> {
     type View = V;
 
-    fn start_db(&self, config: Config) {
-        let log = Logger::init(&config).unwrap();
-        let events = self.log.get_events();
-        let mut tables = self.view.write().unwrap();
-        let mut tables = tables.stores();
+    fn start_db(&self, config: Config) -> DbResult<()> {
+        let log = Logger::init(&config)?;
+        let bytes = log.read_from_file()?;
+        let mut log_offset = 0;
 
-        for (idx, table) in tables.iter_mut().enumerate() {
-            let mut log = log.clone();
-            log.shard_id = self.id;
-            log.table_id = idx;
-            table.set_logger(log);
-        }
+        'log: loop {
+            let Some(chunk) = bytes.get(log_offset..) else {
+                break 'log;
+            };
 
-        for e in events {
-            match tables.get_mut(e.table_id) {
-                Some(table) => table.handle_event(&e.data),
-                None => todo!(),
+            let (Some(entry), next_offset) = LogEntry::head_entry(chunk) else {
+                // this is an incomplete log
+                break 'log;
+            };
+
+            let mut tx_offset = 0;
+            'tx: loop {
+
+
+                todo!();
             }
+
+            log_offset = next_offset;
         }
+        // let events = self.log.get_events();
+        // let mut tables = self.view.write().unwrap();
+        // let mut tables = tables.stores();
+
+        // for (idx, table) in tables.iter_mut().enumerate() {
+        //     let mut log = log.clone();
+        //     log.shard_id = self.id;
+        //     log.table_id = idx;
+        //     table.set_logger(log);
+        // }
+
+        // for e in events {
+        //     match tables.get_mut(e.table_id) {
+        //         Some(table) => table.handle_event(&e.data),
+        //         None => todo!(),
+        //     }
+        // }
+        Ok(())
     }
 
     fn write_tx(&self) -> TxGuard<'_, V> {
         let view = self.view.write().unwrap();
 
-        TxGuard { view, log: &self.log }
+        TxGuard {
+            view,
+            log: &self.log,
+        }
     }
 }
 
@@ -66,7 +92,7 @@ impl<V: Schema> Drop for TxGuard<'_, V> {
 }
 
 #[derive(Default)]
-pub struct Shard<V: Schema> {
+pub struct IpcDb<V: Schema> {
     pub view: Arc<RwLock<V>>,
 
     id: Id,
@@ -78,10 +104,13 @@ pub trait Schema {
 }
 
 pub mod config;
+pub mod errors;
 pub mod log;
 pub mod store;
 
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
+use crate::errors::DbResult;
+use crate::log::LogEntry;
 use crate::{config::Config, log::Logger, store::Store};
