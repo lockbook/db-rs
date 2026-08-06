@@ -10,6 +10,19 @@ pub enum DbError {
     Unexpected(&'static str),
     Io(io::Error),
     MutexPoisoned,
+
+    /// The database started up successfully, but contains an incomplete transaction
+    ///
+    /// For software deployed to end users, likely this is safe to ignore. You can see
+    /// what portion of the entire log was found to be unreadable if you want to handle
+    /// this error with nuance.
+    ///
+    /// For software deployed to servers under your control (where you can author graceful
+    /// shutdowns), you should likely treat this as an error.
+    IncompleteLog {
+        total_log: usize,
+        incomplete_size: usize,
+    },
 }
 
 impl From<io::Error> for DbError {
@@ -30,6 +43,7 @@ impl Display for DbError {
             DbError::Unexpected(u) => write!(f, "unexpected error: {u}"),
             DbError::Io(i) => write!(f, "io error: {i}"),
             DbError::MutexPoisoned => write!(f, "mutex poisoned"),
+            DbError::IncompleteLog { total_log, incomplete_size } => todo!(),
         }
     }
 }
@@ -40,6 +54,7 @@ impl Error for DbError {
             DbError::Io(e) => Some(e),
             DbError::MutexPoisoned => None,
             DbError::Unexpected(_) => None,
+            DbError::IncompleteLog { total_log, incomplete_size } => None,
         }
     }
 }

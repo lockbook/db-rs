@@ -15,26 +15,28 @@ impl<V: Schema> Db for IpcDb<V> {
     fn start_db(&self, config: Config) -> DbResult<()> {
         let log = Logger::init(&config)?;
         let bytes = log.read_from_file()?;
-        let mut log_offset = 0;
+        let mut current_log = &bytes[..];
 
-        'log: loop {
-            let Some(chunk) = bytes.get(log_offset..) else {
-                break 'log;
+        loop {
+            let (maybe_entry, remaining_log) = LogEntry::head_entry(&current_log);
+
+            let Some(entry) = maybe_entry else {
+                if !current_log.is_empty() {
+                    return DbResult::Err(DbError::IncompleteLog {
+                        incomplete_size: current_log.len(),
+                        total_log: bytes.len(),
+                    });
+                } else {
+                    return Ok(());
+                }
             };
 
-            let (Some(entry), next_offset) = LogEntry::head_entry(chunk) else {
-                // this is an incomplete log
-                break 'log;
-            };
+            // loop {
+            //     let mut current_payload = &entry.payload;
+            //     //let (maybe_tx, remaining_payload) = TxEntry::head_entry();
+            // }
 
-            let mut tx_offset = 0;
-            'tx: loop {
-
-
-                todo!();
-            }
-
-            log_offset = next_offset;
+            current_log = remaining_log;
         }
         // let events = self.log.get_events();
         // let mut tables = self.view.write().unwrap();
@@ -111,6 +113,6 @@ pub mod store;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
-use crate::errors::DbResult;
-use crate::log::LogEntry;
+use crate::errors::{DbError, DbResult};
+use crate::log::{LogEntry, TxEntry};
 use crate::{config::Config, log::Logger, store::Store};

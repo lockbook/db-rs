@@ -22,13 +22,35 @@ pub struct TxEntry<'a> {
 }
 
 impl LogEntry<'_> {
-    pub fn head_entry( buf: &[u8]) -> (Option<LogEntry>, usize) {
-        todo!()
+    pub fn head_entry<'a>(buf: &[u8]) -> (Option<LogEntry>, &[u8]) {
+        // seq_no
+        let offset = 0;
+        let id_size = size_of::<Id>();
+        let Some(seq_no) = buf.get(offset..id_size) else {
+            return (None, &buf[buf.len()..]);
+        };
+        let seq_no = Id::from_be_bytes(seq_no.try_into().unwrap());
+        let offset = offset + id_size;
+
+        // payload
+        let Some(payload_size) = buf.get(offset..id_size) else {
+            return (None, &buf[buf.len()..]);
+        };
+        let payload_size = Id::from_be_bytes(payload_size.try_into().unwrap());
+        let offset = offset + id_size;
+        let Some(payload) = buf.get(offset..offset + payload_size) else {
+            return (None, &buf[buf.len()..]);
+        };
+        let offset = offset + payload_size;
+
+        // parsed entry & what remains
+        let entry = LogEntry { seq_no, payload };
+        (Some(entry), &buf[offset..])
     }
 }
 
 impl TxEntry<'_> {
-    pub fn head_entry(&self, buf: &[u8]) -> (Option<TxEntry>, usize) {
+    pub fn head_entry(&self, buf: &[u8]) -> (Option<TxEntry>, &[u8]) {
         todo!()
     }
 
