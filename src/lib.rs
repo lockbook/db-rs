@@ -13,12 +13,15 @@ impl<V: Schema> Db for IpcDb<V> {
     type View = V;
 
     fn start_db(&self, config: Config) -> DbResult<()> {
+        let mut tables = self.view.write().unwrap();
+        let mut tables = tables.stores();
+
         let log = Logger::init(&config)?;
         let bytes = log.read_from_file()?;
         let mut current_log = &bytes[..];
 
         loop {
-            let (maybe_entry, remaining_log) = LogEntry::head_entry(&current_log);
+            let (maybe_entry, remaining_log) = LogEntry::head_entry(current_log);
 
             let Some(entry) = maybe_entry else {
                 if !current_log.is_empty() {
@@ -31,10 +34,25 @@ impl<V: Schema> Db for IpcDb<V> {
                 }
             };
 
-            // loop {
-            //     let mut current_payload = &entry.payload;
-            //     //let (maybe_tx, remaining_payload) = TxEntry::head_entry();
-            // }
+            let mut current_payload = entry.payload;
+            loop {
+                let (maybe_tx, remaining_payload) = TxEntry::head_entry(current_payload);
+
+                let Some(tx) = maybe_tx else {
+                    if !current_payload.is_empty() {
+                        unreachable!("A transaction contains an incomplete entry");
+                    } else {
+                        break;
+                    }
+                };
+
+                match tables.get_mut(tx.table) {
+                    Some(table) => table.handle_event(tx.payload),
+                    None => todo!(),
+                };
+
+                current_payload = remaining_payload;
+            }
 
             current_log = remaining_log;
         }
@@ -55,7 +73,6 @@ impl<V: Schema> Db for IpcDb<V> {
         //         None => todo!(),
         //     }
         // }
-        Ok(())
     }
 
     fn write_tx(&self) -> TxGuard<'_, V> {

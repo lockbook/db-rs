@@ -22,18 +22,19 @@ pub struct TxEntry<'a> {
 }
 
 impl LogEntry<'_> {
-    pub fn head_entry<'a>(buf: &[u8]) -> (Option<LogEntry>, &[u8]) {
-        // seq_no
+    pub fn head_entry(buf: &[u8]) -> (Option<LogEntry>, &[u8]) {
         let offset = 0;
         let id_size = size_of::<Id>();
-        let Some(seq_no) = buf.get(offset..id_size) else {
+
+        // seq_no
+        let Some(seq_no) = buf.get(offset..offset + id_size) else {
             return (None, &buf[buf.len()..]);
         };
         let seq_no = Id::from_be_bytes(seq_no.try_into().unwrap());
         let offset = offset + id_size;
 
         // payload
-        let Some(payload_size) = buf.get(offset..id_size) else {
+        let Some(payload_size) = buf.get(offset..offset + id_size) else {
             return (None, &buf[buf.len()..]);
         };
         let payload_size = Id::from_be_bytes(payload_size.try_into().unwrap());
@@ -50,8 +51,38 @@ impl LogEntry<'_> {
 }
 
 impl TxEntry<'_> {
-    pub fn head_entry(&self, buf: &[u8]) -> (Option<TxEntry>, &[u8]) {
-        todo!()
+    pub fn head_entry<'a>(buf: &'a [u8]) -> (Option<TxEntry<'a>>, &'a [u8]) {
+        let offset = 0;
+        let id_size = size_of::<Id>();
+
+        // shard
+        let Some(shard) = buf.get(offset..offset + id_size) else {
+            return (None, &buf[buf.len()..]);
+        };
+        let shard = Id::from_be_bytes(shard.try_into().unwrap());
+        let offset = offset + id_size;
+
+        // table
+        let Some(table) = buf.get(offset..offset + id_size) else {
+            return (None, &buf[buf.len()..]);
+        };
+        let table = Id::from_be_bytes(table.try_into().unwrap());
+        let offset = offset + id_size;
+
+        // payload
+        let Some(payload_size) = buf.get(offset..offset+id_size) else {
+            return (None, &buf[buf.len()..]);
+        };
+        let payload_size = Id::from_be_bytes(payload_size.try_into().unwrap());
+        let offset = offset + id_size;
+        let Some(payload) = buf.get(offset..offset+payload_size) else {
+            return (None, &buf[buf.len()..]);
+        };
+        let offset = offset + payload_size;
+
+        // parsed entry & what remains
+        let entry = TxEntry { shard, table, payload };
+        (Some(entry), &buf[offset..])
     }
 
     fn write_to_buffer(&self, buf: &mut Vec<u8>) {
@@ -179,10 +210,6 @@ impl Logger {
         let mut buf = Vec::new();
         file.read_to_end(&mut buf)?;
         Ok(buf)
-    }
-
-    pub(crate) fn next_event<'a>(&self, offset: usize, buffer: &[u8]) -> (Option<TxEntry>, usize) {
-        todo!()
     }
 }
 
