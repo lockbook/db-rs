@@ -2,6 +2,8 @@ use std::{error, fmt, io};
 
 #[derive(Debug)]
 pub enum Error {
+    Poisoned,
+    SequenceExhausted,
     Io(io::Error),
     Encode(bincode::error::EncodeError),
     Decode(bincode::error::DecodeError),
@@ -12,14 +14,25 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Poisoned => write!(
+                formatter,
+                "commit failed; reopen the database before continuing"
+            ),
+            Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),
             Self::Io(error) => write!(formatter, "log I/O error: {error}"),
             Self::Encode(error) => write!(formatter, "event encode error: {error}"),
             Self::Decode(error) => write!(formatter, "event decode error: {error}"),
             Self::IncompleteLog { remaining_bytes } => {
-                write!(formatter, "incomplete log entry with {remaining_bytes} trailing bytes")
+                write!(
+                    formatter,
+                    "incomplete log entry with {remaining_bytes} trailing bytes"
+                )
             }
             Self::TrailingBytes { remaining_bytes } => {
-                write!(formatter, "decoded value has {remaining_bytes} trailing bytes")
+                write!(
+                    formatter,
+                    "decoded value has {remaining_bytes} trailing bytes"
+                )
             }
         }
     }
@@ -31,7 +44,10 @@ impl error::Error for Error {
             Self::Io(error) => Some(error),
             Self::Encode(error) => Some(error),
             Self::Decode(error) => Some(error),
-            Self::IncompleteLog { .. } | Self::TrailingBytes { .. } => None,
+            Self::IncompleteLog { .. }
+            | Self::TrailingBytes { .. }
+            | Self::Poisoned
+            | Self::SequenceExhausted => None,
         }
     }
 }

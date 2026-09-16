@@ -1,6 +1,6 @@
 use std::{
     fs::{File, OpenOptions},
-    io::{self, Read},
+    io::{self, Read, Write},
 };
 
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,15 @@ pub struct Log {
 }
 
 impl Log {
+    pub(crate) fn append(&mut self, entry: LogEntry<'_>) -> Result<()> {
+        let body = bincode::serde::encode_to_vec(entry, bincode::config::standard())?;
+        let mut buffer = PayloadBuffer::default();
+        buffer.push(&body);
+        self.file.write_all(&buffer.bytes)?;
+        self.file.sync_all()?;
+        Ok(())
+    }
+
     pub fn init(config: &Config) -> io::Result<Self> {
         let path = config.log_location.join("db.log");
         let file = OpenOptions::new()
