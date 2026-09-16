@@ -1,32 +1,36 @@
 use std::{
     fs::{File, OpenOptions},
     io::{self, Read},
-    mem::size_of,
 };
 
-use crate::{config::Config, payload_buffer::PayloadBuffer, types::SeqNo};
+use serde::{Deserialize, Serialize};
 
+use crate::{
+    config::Config,
+    errors::{Error, Result},
+    payload_buffer::PayloadBuffer,
+};
+
+#[derive(Serialize, Deserialize)]
 pub(crate) struct LogEntry<'a> {
-    pub(crate) seq_no: SeqNo,
+    pub(crate) seq_no: u64,
     pub(crate) payload: &'a [u8],
 }
 
-pub(crate) fn head_entry(buf: &[u8]) -> (Option<LogEntry<'_>>, &[u8]) {
-    let offset = 0;
-    let id_size = size_of::<SeqNo>();
-
-    let Some(seq_no) = buf.get(offset..offset + id_size) else {
-        return (None, &buf[buf.len()..]);
+pub(crate) fn head_entry<'a>(remaining: &mut &'a [u8]) -> Result<Option<LogEntry<'a>>> {
+    let mut rest = *remaining;
+    let Some(body) = PayloadBuffer::head_payload(&mut rest)? else {
+        return Ok(None);
     };
-    let seq_no = SeqNo::from_be_bytes(seq_no.try_into().unwrap());
-    let offset = offset + id_size;
-
-    let (Some(payload), rest) = PayloadBuffer::head_payload(&buf[offset..]) else {
-        return (None, &buf[buf.len()..]);
-    };
-
-    let entry = LogEntry { seq_no, payload };
-    (Some(entry), rest)
+    let (entry, consumed) =
+        bincode::serde::borrow_decode_from_slice(body, bincode::config::standard())?;
+    if consumed != body.len() {
+        return Err(Error::TrailingBytes {
+            remaining_bytes: body.len() - consumed,
+        });
+    }
+    *remaining = rest;
+    Ok(Some(entry))
 }
 
 pub struct Log {

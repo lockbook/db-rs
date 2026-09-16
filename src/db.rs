@@ -1,7 +1,7 @@
 use crate::{
     View,
     config::Config,
-    errors::{Error, Result},
+    errors::Result,
     log::{Log, head_entry},
 };
 
@@ -17,21 +17,11 @@ impl<V: View> Db<V> {
         let bytes = log.get_bytes()?;
         let mut remaining = bytes.as_slice();
 
-        while !remaining.is_empty() {
-            let (Some(entry), rest) = head_entry(remaining) else {
-                return Err(Error::IncompleteLog {
-                    remaining_bytes: remaining.len(),
-                });
-            };
-
+        while let Some(entry) = head_entry(&mut remaining)? {
             view.handle_events(entry.payload)?;
-            remaining = rest;
         }
 
-        Ok(Self {
-            view,
-            log,
-        })
+        Ok(Self { view, log })
     }
 
     pub fn begin_tx(&mut self) -> &mut V {

@@ -6,6 +6,7 @@ pub enum Error {
     Encode(bincode::error::EncodeError),
     Decode(bincode::error::DecodeError),
     IncompleteLog { remaining_bytes: usize },
+    TrailingBytes { remaining_bytes: usize },
 }
 
 impl fmt::Display for Error {
@@ -17,6 +18,9 @@ impl fmt::Display for Error {
             Self::IncompleteLog { remaining_bytes } => {
                 write!(formatter, "incomplete log entry with {remaining_bytes} trailing bytes")
             }
+            Self::TrailingBytes { remaining_bytes } => {
+                write!(formatter, "decoded value has {remaining_bytes} trailing bytes")
+            }
         }
     }
 }
@@ -27,7 +31,7 @@ impl error::Error for Error {
             Self::Io(error) => Some(error),
             Self::Encode(error) => Some(error),
             Self::Decode(error) => Some(error),
-            Self::IncompleteLog { .. } => None,
+            Self::IncompleteLog { .. } | Self::TrailingBytes { .. } => None,
         }
     }
 }

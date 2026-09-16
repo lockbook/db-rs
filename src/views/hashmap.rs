@@ -6,11 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{
-    View,
-    errors::{Error, Result},
-    payload_buffer::PayloadBuffer,
-};
+use crate::{View, errors::Result, payload_buffer::PayloadBuffer};
 
 use super::{bin_decode, bin_encode};
 
@@ -33,12 +29,7 @@ where
     S: BuildHasher + Default,
 {
     fn handle_events(&mut self, mut events: &[u8]) -> Result<()> {
-        while !events.is_empty() {
-            let (Some(event), rest) = PayloadBuffer::head_payload(events) else {
-                return Err(Error::IncompleteLog {
-                    remaining_bytes: events.len(),
-                });
-            };
+        while let Some(event) = PayloadBuffer::head_payload(&mut events)? {
             let diff: Diff<K, V> = bin_decode(event)?;
 
             match diff {
@@ -52,7 +43,6 @@ where
                     self.inner.clear();
                 }
             }
-            events = rest;
         }
 
         Ok(())

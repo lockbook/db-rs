@@ -3,7 +3,6 @@ pub mod db;
 pub mod errors;
 pub mod log;
 pub mod payload_buffer;
-pub mod types;
 pub mod views;
 
 pub trait View: Default {
