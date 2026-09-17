@@ -4,6 +4,7 @@ use std::{error, fmt, io};
 pub enum Error {
     Poisoned,
     SequenceExhausted,
+    OutOfOrderSequence { current: u64, found: u64 },
     Io(io::Error),
     Encode(bincode::error::EncodeError),
     Decode(bincode::error::DecodeError),
@@ -19,6 +20,9 @@ impl fmt::Display for Error {
                 "commit failed; reopen the database before continuing"
             ),
             Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),
+            Self::OutOfOrderSequence { current, found } => {
+                write!(formatter, "log sequence number {found} precedes {current}")
+            }
             Self::Io(error) => write!(formatter, "log I/O error: {error}"),
             Self::Encode(error) => write!(formatter, "event encode error: {error}"),
             Self::Decode(error) => write!(formatter, "event decode error: {error}"),
@@ -47,6 +51,7 @@ impl error::Error for Error {
             Self::IncompleteLog { .. }
             | Self::TrailingBytes { .. }
             | Self::Poisoned
+            | Self::OutOfOrderSequence { .. }
             | Self::SequenceExhausted => None,
         }
     }

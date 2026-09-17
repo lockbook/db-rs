@@ -24,8 +24,8 @@ pub struct SHashMap<K, V, S = RandomState> {
 
 impl<K, V, S> View for SHashMap<K, V, S>
 where
-    K: DeserializeOwned + Eq + Hash,
-    V: DeserializeOwned,
+    K: DeserializeOwned + Serialize + Eq + Hash,
+    V: DeserializeOwned + Serialize,
     S: BuildHasher + Default,
 {
     fn handle_events(&mut self, mut events: &[u8]) -> Result<()> {
@@ -50,6 +50,17 @@ where
 
     fn take_events(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.pending_events).bytes
+    }
+
+    fn snapshot(&self) -> Result<Vec<u8>> {
+        let mut snapshot = PayloadBuffer::default();
+
+        for (key, value) in &self.inner {
+            let event = bin_encode(&Diff::Insert { key, value })?;
+            snapshot.push(&event);
+        }
+
+        Ok(snapshot.bytes)
     }
 }
 

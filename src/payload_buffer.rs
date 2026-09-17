@@ -31,3 +31,85 @@ impl PayloadBuffer {
     }
 }
 use crate::errors::{Error, Result};
+
+#[cfg(test)]
+mod tests {
+    use super::PayloadBuffer;
+    use crate::errors::Error;
+
+    #[test]
+    fn empty_buffer_has_no_payload() {
+        let buffer = PayloadBuffer::default();
+        let mut remaining = buffer.bytes.as_slice();
+
+        assert!(matches!(
+            PayloadBuffer::head_payload(&mut remaining),
+            Ok(None)
+        ));
+    }
+
+    #[test]
+    fn empty_payload_is_distinct_from_empty_buffer() {
+        let mut buffer = PayloadBuffer::default();
+        buffer.push(b"");
+        assert_eq!(buffer.bytes.len(), 8);
+
+        let mut remaining = buffer.bytes.as_slice();
+        assert_eq!(
+            PayloadBuffer::head_payload(&mut remaining).unwrap(),
+            Some(b"".as_slice())
+        );
+        assert!(matches!(
+            PayloadBuffer::head_payload(&mut remaining),
+            Ok(None)
+        ));
+    }
+
+    #[test]
+    fn single_payload_round_trip() {
+        let mut buffer = PayloadBuffer::default();
+        let payload = [0; 10];
+
+        buffer.push(&payload);
+        assert_eq!(buffer.bytes.len(), 18);
+
+        let mut remaining = buffer.bytes.as_slice();
+        let decoded = PayloadBuffer::head_payload(&mut remaining)
+            .unwrap()
+            .unwrap();
+        assert_eq!(decoded, payload);
+    }
+
+    #[test]
+    fn multiple_payloads_round_trip() {
+        let mut buffer = PayloadBuffer::default();
+        let payloads: [&[u8]; 5] = [b"one", b"two", b"three", b"four", b"five"];
+
+        for payload in payloads {
+            buffer.push(payload);
+        }
+
+        let mut remaining = buffer.bytes.as_slice();
+        let mut decoded = Vec::new();
+        while let Some(payload) = PayloadBuffer::head_payload(&mut remaining).unwrap() {
+            decoded.push(payload);
+        }
+
+        assert_eq!(decoded, payloads);
+    }
+
+    #[test]
+    fn truncated_payload_is_incomplete() {
+        let mut buffer = PayloadBuffer::default();
+        buffer.push(&[0; 10]);
+        buffer.bytes.pop();
+
+        let mut remaining = buffer.bytes.as_slice();
+        assert!(matches!(
+            PayloadBuffer::head_payload(&mut remaining),
+            Err(Error::IncompleteLog {
+                remaining_bytes: 17
+            })
+        ));
+    }
+}
