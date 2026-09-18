@@ -1,6 +1,6 @@
 use std::fs;
 
-use db_rs::{config::Config, db::Db, views::hashmap::SHashMap};
+use db_rs::{View, config::Config, views::hashmap::DbHashMap};
 
 #[test]
 fn round_trip() {
@@ -8,7 +8,7 @@ fn round_trip() {
     let log_location = config.log_location.clone();
 
     {
-        let mut db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+        let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
         let view = db.write_tx().unwrap();
         view.insert("one".into(), 1).unwrap();
         view.insert("two".into(), 2).unwrap();
@@ -17,7 +17,7 @@ fn round_trip() {
     }
 
     let config = Config::default().log_location(log_location);
-    let db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+    let db = DbHashMap::<String, u64>::init(&config).unwrap();
     let view = db.read_tx().unwrap();
     assert_eq!(view.get("one"), Some(&1));
     assert_eq!(view.get("two"), Some(&2));
@@ -28,7 +28,7 @@ fn round_trip() {
 fn snapshot_reduces_log_size() {
     let config = Config::test();
     let log_location = config.log_location.clone();
-    let mut db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+    let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
 
     for value in 0..100 {
         db.write_tx().unwrap().insert("key".into(), value).unwrap();
@@ -45,6 +45,6 @@ fn snapshot_reduces_log_size() {
 
     drop(db);
     let config = Config::default().log_location(log_location);
-    let db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+    let db = DbHashMap::<String, u64>::init(&config).unwrap();
     assert_eq!(db.read_tx().unwrap().get("key"), Some(&99));
 }

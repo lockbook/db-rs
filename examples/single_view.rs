@@ -1,8 +1,8 @@
-use db_rs::{config::Config, db::Db, errors::Result, views::hashmap::SHashMap};
+use db_rs::{View, config::Config, errors::Result, views::hashmap::DbHashMap};
 
 fn main() -> Result<()> {
     let config = Config::default().log_location(".");
-    let mut db = Db::<SHashMap<String, i32>>::init(config)?;
+    let mut db = DbHashMap::<String, i32>::init(&config)?;
 
     {
         let view = db.write_tx()?;
@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     drop(db);
 
     let config = Config::default().log_location(".");
-    let db = Db::<SHashMap<String, i32>>::init(config)?;
+    let db = DbHashMap::<String, i32>::init(&config)?;
     let view = db.read_tx()?;
     assert_eq!(view.get("one"), Some(&1));
     assert_eq!(view.get("two"), Some(&2));

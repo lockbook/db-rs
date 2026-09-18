@@ -3,6 +3,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::errors::{Error, Result};
 
 pub mod hashmap;
+pub mod option;
 
 pub(crate) fn bin_encode<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     Ok(bincode::serde::encode_to_vec(

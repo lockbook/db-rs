@@ -6,7 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{View, errors::Result, payload_buffer::PayloadBuffer};
+use crate::{View, errors::Result, log::Log, payload_buffer::PayloadBuffer};
 
 use super::{bin_decode, bin_encode};
 
@@ -17,17 +17,30 @@ enum Diff<K, V> {
     Clear,
 }
 
-pub struct SHashMap<K, V, S = RandomState> {
+pub struct DbHashMap<K, V, S = RandomState> {
     inner: HashMap<K, V, S>,
     pending_events: PayloadBuffer,
+    log: Option<Log>,
 }
 
-impl<K, V, S> View for SHashMap<K, V, S>
+impl<K, V, S> View for DbHashMap<K, V, S>
 where
     K: DeserializeOwned + Serialize + Eq + Hash,
     V: DeserializeOwned + Serialize,
     S: BuildHasher + Default,
 {
+    fn log(&self) -> &Log {
+        self.log.as_ref().expect("view has no initialized log")
+    }
+
+    fn log_mut(&mut self) -> &mut Log {
+        self.log.as_mut().expect("view has no initialized log")
+    }
+
+    fn set_log(&mut self, log: Log) {
+        self.log = Some(log);
+    }
+
     fn handle_events(&mut self, mut events: &[u8]) -> Result<()> {
         while let Some(event) = PayloadBuffer::head_payload(&mut events)? {
             let diff: Diff<K, V> = bin_decode(event)?;
@@ -52,7 +65,7 @@ where
         std::mem::take(&mut self.pending_events).bytes
     }
 
-    fn snapshot(&self) -> Result<Vec<u8>> {
+    fn snapshot_bytes(&self) -> Result<Vec<u8>> {
         let mut snapshot = PayloadBuffer::default();
 
         for (key, value) in &self.inner {
@@ -64,16 +77,17 @@ where
     }
 }
 
-impl<K, V> SHashMap<K, V> {
+impl<K, V> DbHashMap<K, V> {
     pub fn new() -> Self {
         Self {
             inner: HashMap::new(),
             pending_events: PayloadBuffer::default(),
+            log: None,
         }
     }
 }
 
-impl<K, V, S> Default for SHashMap<K, V, S>
+impl<K, V, S> Default for DbHashMap<K, V, S>
 where
     S: Default,
 {
@@ -81,11 +95,12 @@ where
         Self {
             inner: HashMap::with_hasher(S::default()),
             pending_events: PayloadBuffer::default(),
+            log: None,
         }
     }
 }
 
-impl<K, V, S> SHashMap<K, V, S> {
+impl<K, V, S> DbHashMap<K, V, S> {
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -99,7 +114,7 @@ impl<K, V, S> SHashMap<K, V, S> {
     }
 }
 
-impl<K, V, S> SHashMap<K, V, S>
+impl<K, V, S> DbHashMap<K, V, S>
 where
     K: Eq + Hash,
     S: BuildHasher,
@@ -121,7 +136,7 @@ where
     }
 }
 
-impl<K, V, S> SHashMap<K, V, S>
+impl<K, V, S> DbHashMap<K, V, S>
 where
     K: Eq + Hash + Serialize,
     V: Serialize,

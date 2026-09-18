@@ -38,6 +38,8 @@ pub struct Log {
     file: File,
     path: PathBuf,
     directory: PathBuf,
+    pub(crate) seq_no: u64,
+    pub(crate) poisoned: bool,
 }
 
 impl Log {
@@ -60,6 +62,8 @@ impl Log {
             file,
             path,
             directory,
+            seq_no: 0,
+            poisoned: false,
         })
     }
 
@@ -122,6 +126,8 @@ impl Log {
                 file,
                 path: temporary_path.clone(),
                 directory: self.directory.clone(),
+                seq_no,
+                poisoned: false,
             };
             snapshot.append(LogEntry::Events { seq_no, payload })?;
         }
@@ -132,6 +138,8 @@ impl Log {
             file,
             path,
             directory: self.directory.clone(),
+            seq_no,
+            poisoned: false,
         }))
     }
 
