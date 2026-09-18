@@ -1,9 +1,7 @@
-use std::path::PathBuf;
-
-#[cfg(test)]
 use std::{
     fs,
     io::ErrorKind,
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -18,7 +16,6 @@ impl Config {
         self
     }
 
-    #[cfg(test)]
     pub fn test() -> Self {
         let mut id = SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -1,36 +1,50 @@
-use std::{
-    fs,
-    io::ErrorKind,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::fs;
 
 use db_rs::{config::Config, db::Db, views::hashmap::SHashMap};
 
 #[test]
-fn snapshot() {
-    let config = Config::default().log_location(test_directory());
-    let mut db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+fn round_trip() {
+    let config = Config::test();
+    let log_location = config.log_location.clone();
 
-    let view = db.begin_tx().unwrap();
-    view.insert("one".into(), 1).unwrap();
-    view.insert("two".into(), 2).unwrap();
-    view.insert("three".into(), 3).unwrap();
-    db.end_tx().unwrap();
+    {
+        let mut db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+        let view = db.write_tx().unwrap();
+        view.insert("one".into(), 1).unwrap();
+        view.insert("two".into(), 2).unwrap();
+        view.insert("three".into(), 3).unwrap();
+        db.end_tx().unwrap();
+    }
+
+    let config = Config::default().log_location(log_location);
+    let db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+    let view = db.read_tx().unwrap();
+    assert_eq!(view.get("one"), Some(&1));
+    assert_eq!(view.get("two"), Some(&2));
+    assert_eq!(view.get("three"), Some(&3));
 }
 
-fn test_directory() -> PathBuf {
-    let mut id = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+#[test]
+fn snapshot_reduces_log_size() {
+    let config = Config::test();
+    let log_location = config.log_location.clone();
+    let mut db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
 
-    loop {
-        let path = std::env::temp_dir().join(format!("db-rs-{id}"));
-        match fs::create_dir(&path) {
-            Ok(()) => return path,
-            Err(error) if error.kind() == ErrorKind::AlreadyExists => id += 1,
-            Err(error) => panic!("failed to create test directory: {error}"),
-        }
+    for value in 0..100 {
+        db.write_tx().unwrap().insert("key".into(), value).unwrap();
+        db.end_tx().unwrap();
     }
+
+    let original_size = fs::metadata(log_location.join("db.0.log")).unwrap().len();
+    assert!(original_size > 1_000);
+
+    db.snapshot().unwrap();
+
+    let snapshot_size = fs::metadata(log_location.join("db.100.log")).unwrap().len();
+    assert!(snapshot_size < original_size / 10);
+
+    drop(db);
+    let config = Config::default().log_location(log_location);
+    let db: Db<SHashMap<String, u64>> = Db::init(config).unwrap();
+    assert_eq!(db.read_tx().unwrap().get("key"), Some(&99));
 }

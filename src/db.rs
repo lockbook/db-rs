@@ -53,7 +53,14 @@ impl<V: View> Db<V> {
         }
     }
 
-    pub fn begin_tx(&mut self) -> Result<&mut V> {
+    pub fn read_tx(&self) -> Result<&V> {
+        if self.poisoned {
+            return Err(Error::Poisoned);
+        }
+        Ok(&self.view)
+    }
+
+    pub fn write_tx(&mut self) -> Result<&mut V> {
         if self.poisoned {
             return Err(Error::Poisoned);
         }
