@@ -148,6 +148,18 @@ impl Log {
         self.file.read_to_end(&mut bytes)?;
         Ok(bytes)
     }
+
+    pub(crate) fn read_lock(&self) -> io::Result<File> {
+        let file = OpenOptions::new().read(true).open(&self.path)?;
+        file.lock_shared()?;
+        Ok(file)
+    }
+
+    pub(crate) fn write_lock(&self) -> io::Result<File> {
+        let file = OpenOptions::new().read(true).write(true).open(&self.path)?;
+        file.lock()?;
+        Ok(file)
+    }
 }
 
 #[cfg(test)]

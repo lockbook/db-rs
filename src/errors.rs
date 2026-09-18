@@ -17,7 +17,7 @@ impl fmt::Display for Error {
         match self {
             Self::Poisoned => write!(
                 formatter,
-                "commit failed; reopen the database before continuing"
+                "transaction failed; reopen the database before continuing"
             ),
             Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),
             Self::OutOfOrderSequence { current, found } => {

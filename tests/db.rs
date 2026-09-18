@@ -9,11 +9,12 @@ fn round_trip() {
 
     {
         let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
-        let view = db.write_tx().unwrap();
-        view.insert("one".into(), 1).unwrap();
-        view.insert("two".into(), 2).unwrap();
-        view.insert("three".into(), 3).unwrap();
-        db.end_tx().unwrap();
+        {
+            let mut view = db.write_tx().unwrap();
+            view.insert("one".into(), 1).unwrap();
+            view.insert("two".into(), 2).unwrap();
+            view.insert("three".into(), 3).unwrap();
+        }
     }
 
     let config = Config::default().log_location(log_location);
@@ -32,7 +33,7 @@ fn snapshot_reduces_log_size() {
 
     for value in 0..100 {
         db.write_tx().unwrap().insert("key".into(), value).unwrap();
-        db.end_tx().unwrap();
+        db.flush_pending().unwrap();
     }
 
     let original_size = fs::metadata(log_location.join("db.0.log")).unwrap().len();

@@ -61,7 +61,7 @@ where
         Ok(())
     }
 
-    fn take_events(&mut self) -> Vec<u8> {
+    fn take_pending(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.pending_events).bytes
     }
 

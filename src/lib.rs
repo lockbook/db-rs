@@ -1,11 +1,13 @@
 pub mod config;
 pub mod errors;
+pub mod guard;
 pub mod log;
 pub mod payload_buffer;
 pub mod views;
 
 use config::Config;
 use errors::{Error, Result};
+use guard::{ReadTx, WriteTx};
 use log::{Log, LogEntry, head_entry};
 
 pub trait View: Default {
@@ -14,7 +16,7 @@ pub trait View: Default {
     fn set_log(&mut self, log: Log);
 
     fn handle_events(&mut self, events: &[u8]) -> Result<()>;
-    fn take_events(&mut self) -> Vec<u8>;
+    fn take_pending(&mut self) -> Vec<u8>;
     fn snapshot_bytes(&self) -> Result<Vec<u8>>;
 
     /// Restores a view with its active log.
@@ -55,27 +57,33 @@ pub trait View: Default {
         }
     }
 
-    fn read_tx(&self) -> Result<&Self> {
+    fn read_tx(&self) -> Result<ReadTx<'_, Self>> {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
-        Ok(self)
+        let lock = self.log().read_lock()?;
+        Ok(ReadTx { view: self, lock })
     }
 
-    fn write_tx(&mut self) -> Result<&mut Self> {
+    fn write_tx(&mut self) -> Result<WriteTx<'_, Self>> {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
-        Ok(self)
+        let lock = self.log().write_lock()?;
+        Ok(WriteTx {
+            view: self,
+            lock,
+            finalized: false,
+        })
     }
 
-    fn end_tx(&mut self) -> Result<()> {
+    fn flush_pending(&mut self) -> Result<()> {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
         // Once events are drained, any failure requires reopening the database.
         self.log_mut().poisoned = true;
-        let events = self.take_events();
+        let events = self.take_pending();
         let log = self.log_mut();
         if !events.is_empty() {
             let seq_no = log.seq_no.checked_add(1).ok_or(Error::SequenceExhausted)?;
@@ -90,7 +98,7 @@ pub trait View: Default {
     }
 
     fn snapshot(&mut self) -> Result<()> {
-        self.end_tx()?;
+        self.flush_pending()?;
         let payload = self.snapshot_bytes()?;
 
         let log = self.log_mut();
