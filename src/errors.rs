@@ -6,6 +6,7 @@ pub enum Error {
     MissingSnapshotLog,
     SequenceExhausted,
     UnknownTable { table_id: usize },
+    IndexOutOfBounds { index: usize, len: usize },
     OutOfOrderSequence { current: u64, found: u64 },
     Io(io::Error),
     Encode(bincode::error::EncodeError),
@@ -24,6 +25,9 @@ impl fmt::Display for Error {
             Self::MissingSnapshotLog => write!(formatter, "snapshot log is missing"),
             Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),
             Self::UnknownTable { table_id } => write!(formatter, "unknown table ID: {table_id}"),
+            Self::IndexOutOfBounds { index, len } => {
+                write!(formatter, "index {index} is out of bounds for length {len}")
+            }
             Self::OutOfOrderSequence { current, found } => {
                 write!(formatter, "log sequence number {found} precedes {current}")
             }
@@ -57,6 +61,7 @@ impl error::Error for Error {
             | Self::Poisoned
             | Self::MissingSnapshotLog
             | Self::UnknownTable { .. }
+            | Self::IndexOutOfBounds { .. }
             | Self::OutOfOrderSequence { .. }
             | Self::SequenceExhausted => None,
         }

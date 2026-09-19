@@ -4,7 +4,10 @@ use crate::errors::{Error, Result};
 
 pub mod composite_view;
 pub mod hashmap;
+pub mod hashmap_map;
+pub mod hashmap_set;
 pub mod option;
+pub mod vec;
 
 pub(crate) fn bin_encode<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     Ok(bincode::serde::encode_to_vec(
