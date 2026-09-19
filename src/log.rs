@@ -49,7 +49,7 @@ impl Log {
         } else {
             config.log_location.clone()
         };
-        let candidate = Self::find_candidate(config)?;
+        let candidate = Self::find_latest(config)?;
         let create = candidate.is_none();
         let path = candidate.unwrap_or_else(|| directory.join("db.0.log"));
         let file = OpenOptions::new()
@@ -67,7 +67,7 @@ impl Log {
         })
     }
 
-    pub fn find_candidate(config: &Config) -> io::Result<Option<PathBuf>> {
+    pub fn find_latest(config: &Config) -> io::Result<Option<PathBuf>> {
         let directory = if config.log_location.is_empty() {
             Path::new(".")
         } else {
@@ -80,13 +80,7 @@ impl Log {
             if !entry.file_type()?.is_file() {
                 continue;
             }
-            let Some(sequence) = entry
-                .file_name()
-                .to_str()
-                .and_then(|name| name.strip_prefix("db."))
-                .and_then(|name| name.strip_suffix(".log"))
-                .and_then(|number| number.parse::<u64>().ok())
-            else {
+            let Some(sequence) = Self::log_sequence(&entry.file_name()) else {
                 continue;
             };
             if latest
@@ -98,6 +92,53 @@ impl Log {
         }
 
         Ok(latest.map(|(_, entry)| entry.path()))
+    }
+
+    fn log_sequence(name: &std::ffi::OsStr) -> Option<u64> {
+        name.to_str()?
+            .strip_prefix("db.")?
+            .strip_suffix(".log")?
+            .parse()
+            .ok()
+    }
+
+    pub(crate) fn find_next(&self) -> io::Result<Option<Self>> {
+        let current = Self::log_sequence(self.path.file_name().expect("log path has a file name"))
+            .expect("active log has a numbered file name");
+        let mut next: Option<(u64, fs::DirEntry)> = None;
+
+        for entry in fs::read_dir(&self.directory)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let Some(sequence) = Self::log_sequence(&entry.file_name()) else {
+                continue;
+            };
+            if sequence <= current {
+                continue;
+            }
+            if next
+                .as_ref()
+                .is_none_or(|(candidate, _)| sequence < *candidate)
+            {
+                next = Some((sequence, entry));
+            }
+        }
+
+        let Some((_, entry)) = next else {
+            return Ok(None);
+        };
+
+        let path = entry.path();
+        let file = OpenOptions::new().read(true).append(true).open(&path)?;
+        Ok(Some(Self {
+            file,
+            path,
+            directory: self.directory.clone(),
+            seq_no: self.seq_no,
+            poisoned: false,
+        }))
     }
 
     pub(crate) fn append(&mut self, entry: LogEntry<'_>) -> Result<()> {
@@ -153,6 +194,22 @@ impl Log {
         let file = OpenOptions::new().read(true).open(&self.path)?;
         file.lock_shared()?;
         Ok(file)
+    }
+
+    pub(crate) fn is_stale(&self, locked_file: &mut File) -> Result<bool> {
+        let mut bytes = Vec::new();
+        locked_file.read_to_end(&mut bytes)?;
+        let mut remaining = bytes.as_slice();
+
+        while let Some(entry) = head_entry(&mut remaining)? {
+            match entry {
+                LogEntry::Events { seq_no, .. } if seq_no > self.seq_no => return Ok(true),
+                LogEntry::Snapshot => return Ok(true),
+                LogEntry::Events { .. } => {}
+            }
+        }
+
+        Ok(false)
     }
 
     pub(crate) fn write_lock(&self) -> io::Result<File> {
@@ -211,7 +268,7 @@ mod tests {
             File::create(config.log_location.join(name)).unwrap();
         }
 
-        assert_eq!(Log::find_candidate(&config).unwrap(), None);
+        assert_eq!(Log::find_latest(&config).unwrap(), None);
     }
 
     #[test]
@@ -230,8 +287,23 @@ mod tests {
         fs::create_dir(config.log_location.join("db.99.log")).unwrap();
 
         assert_eq!(
-            Log::find_candidate(&config).unwrap(),
+            Log::find_latest(&config).unwrap(),
             Some(config.log_location.join("db.10.log"))
+        );
+    }
+
+    #[test]
+    fn finds_next_log_instead_of_latest() {
+        let config = Config::test();
+        File::create(config.log_location.join("db.0.log")).unwrap();
+        let log = Log::init(&config).unwrap();
+        for name in ["db.9.log", "db.10.log"] {
+            File::create(config.log_location.join(name)).unwrap();
+        }
+
+        assert_eq!(
+            log.find_next().unwrap().unwrap().path,
+            config.log_location.join("db.9.log")
         );
     }
 }

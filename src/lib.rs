@@ -5,6 +5,8 @@ pub mod log;
 pub mod payload_buffer;
 pub mod views;
 
+use std::fs::File;
+
 use config::Config;
 use errors::{Error, Result};
 use guard::{ReadTx, WriteTx};
@@ -22,12 +24,51 @@ pub trait View: Default {
     /// Restores a view with its active log.
     fn init(config: &Config) -> Result<Self> {
         let mut view = Self::default();
-        let mut seq_no = 0;
+        let log = Log::init(config)?;
+        let lock = log.write_lock()?;
+        view.set_log(log);
+        let lock = view.catch_up(lock)?;
+        lock.unlock()?;
+        Ok(view)
+    }
 
-        'candidate: loop {
-            let mut log = Log::init(config)?;
-            let bytes = log.get_bytes()?;
+    fn read_tx(&self) -> Result<ReadTx<'_, Self>> {
+        if self.log().poisoned {
+            return Err(Error::Poisoned);
+        }
+        let mut lock = self.log().read_lock()?;
+        let stale = self.log().is_stale(&mut lock)?;
+        Ok(ReadTx {
+            view: self,
+            lock,
+            stale,
+        })
+    }
+
+    fn write_tx(&mut self) -> Result<WriteTx<'_, Self>> {
+        if self.log().poisoned {
+            return Err(Error::Poisoned);
+        }
+        let lock = self.log().write_lock()?;
+        let lock = match self.catch_up(lock) {
+            Ok(lock) => lock,
+            Err(error) => {
+                self.log_mut().poisoned = true;
+                return Err(error);
+            }
+        };
+        Ok(WriteTx {
+            view: self,
+            lock,
+            finalized: false,
+        })
+    }
+
+    fn catch_up(&mut self, mut lock: File) -> Result<File> {
+        loop {
+            let bytes = self.log_mut().get_bytes()?;
             let mut remaining = bytes.as_slice();
+            let mut snapshot = false;
 
             while let Some(entry) = head_entry(&mut remaining)? {
                 match entry {
@@ -35,6 +76,7 @@ pub trait View: Default {
                         seq_no: entry_seq_no,
                         payload,
                     } => {
+                        let seq_no = self.log().seq_no;
                         if entry_seq_no == seq_no {
                             continue;
                         }
@@ -44,37 +86,28 @@ pub trait View: Default {
                                 found: entry_seq_no,
                             });
                         }
-                        view.handle_events(payload)?;
-                        seq_no = entry_seq_no;
+                        self.handle_events(payload)?;
+                        self.log_mut().seq_no = entry_seq_no;
                     }
-                    LogEntry::Snapshot => continue 'candidate,
+                    LogEntry::Snapshot => {
+                        snapshot = true;
+                        break;
+                    }
                 }
             }
 
-            log.seq_no = seq_no;
-            view.set_log(log);
-            return Ok(view);
-        }
-    }
+            if !snapshot {
+                return Ok(lock);
+            }
 
-    fn read_tx(&self) -> Result<ReadTx<'_, Self>> {
-        if self.log().poisoned {
-            return Err(Error::Poisoned);
+            let Some(new_log) = self.log().find_next()? else {
+                return Err(Error::MissingSnapshotLog);
+            };
+            let new_lock = new_log.write_lock()?;
+            lock.unlock()?;
+            self.set_log(new_log);
+            lock = new_lock;
         }
-        let lock = self.log().read_lock()?;
-        Ok(ReadTx { view: self, lock })
-    }
-
-    fn write_tx(&mut self) -> Result<WriteTx<'_, Self>> {
-        if self.log().poisoned {
-            return Err(Error::Poisoned);
-        }
-        let lock = self.log().write_lock()?;
-        Ok(WriteTx {
-            view: self,
-            lock,
-            finalized: false,
-        })
     }
 
     fn flush_pending(&mut self) -> Result<()> {
@@ -98,18 +131,19 @@ pub trait View: Default {
     }
 
     fn snapshot(&mut self) -> Result<()> {
-        self.flush_pending()?;
-        let payload = self.snapshot_bytes()?;
+        let mut tx = self.write_tx()?;
+        tx.flush_pending()?;
+        let payload = tx.snapshot_bytes()?;
 
-        let log = self.log_mut();
+        let log = tx.log_mut();
         log.poisoned = true;
         let Some(new_log) = log.create_snapshot(log.seq_no, &payload)? else {
             log.poisoned = false;
-            return Ok(());
+            return tx.end_tx();
         };
         log.append(LogEntry::Snapshot)?;
-        self.set_log(new_log);
+        tx.set_log(new_log);
 
-        Ok(())
+        tx.end_tx()
     }
 }

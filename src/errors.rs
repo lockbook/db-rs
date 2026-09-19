@@ -3,6 +3,7 @@ use std::{error, fmt, io};
 #[derive(Debug)]
 pub enum Error {
     Poisoned,
+    MissingSnapshotLog,
     SequenceExhausted,
     OutOfOrderSequence { current: u64, found: u64 },
     Io(io::Error),
@@ -19,6 +20,7 @@ impl fmt::Display for Error {
                 formatter,
                 "transaction failed; reopen the database before continuing"
             ),
+            Self::MissingSnapshotLog => write!(formatter, "snapshot log is missing"),
             Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),
             Self::OutOfOrderSequence { current, found } => {
                 write!(formatter, "log sequence number {found} precedes {current}")
@@ -51,6 +53,7 @@ impl error::Error for Error {
             Self::IncompleteLog { .. }
             | Self::TrailingBytes { .. }
             | Self::Poisoned
+            | Self::MissingSnapshotLog
             | Self::OutOfOrderSequence { .. }
             | Self::SequenceExhausted => None,
         }
