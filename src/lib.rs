@@ -42,13 +42,8 @@ pub trait View {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
-        let mut lock = self.log().read_lock()?;
-        let stale = self.log().is_stale(&mut lock)?;
-        Ok(ReadTx {
-            view: self,
-            lock,
-            stale,
-        })
+        let lock = self.log().read_lock()?;
+        Ok(ReadTx { view: self, lock })
     }
 
     fn write_tx(&mut self) -> Result<WriteTx<'_, Self>>

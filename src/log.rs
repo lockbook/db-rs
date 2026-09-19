@@ -195,22 +195,6 @@ impl Log {
         Ok(file)
     }
 
-    pub(crate) fn is_stale(&self, locked_file: &mut File) -> Result<bool> {
-        let mut bytes = Vec::new();
-        locked_file.read_to_end(&mut bytes)?;
-        let mut remaining = bytes.as_slice();
-
-        while let Some(entry) = head_entry(&mut remaining)? {
-            match entry {
-                LogEntry::Events { seq_no, .. } if seq_no > self.seq_no => return Ok(true),
-                LogEntry::Snapshot => return Ok(true),
-                LogEntry::Events { .. } => {}
-            }
-        }
-
-        Ok(false)
-    }
-
     pub(crate) fn write_lock(&self) -> io::Result<File> {
         let file = OpenOptions::new().read(true).write(true).open(&self.path)?;
         file.lock()?;

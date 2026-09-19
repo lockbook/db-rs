@@ -8,7 +8,6 @@ use crate::{View, errors::Result};
 pub struct ReadTx<'a, V: ?Sized> {
     pub(crate) view: &'a V,
     pub(crate) lock: File,
-    pub stale: bool,
 }
 
 impl<V: ?Sized> Deref for ReadTx<'_, V> {

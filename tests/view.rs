@@ -17,14 +17,12 @@ fn write_transaction_catches_up_a_stale_view() {
         .unwrap();
 
     let read = second.read_tx().unwrap();
-    assert!(read.stale);
     assert_eq!(read.get("key"), None);
     drop(read);
 
     second.write_tx().unwrap().end_tx().unwrap();
 
     let read = second.read_tx().unwrap();
-    assert!(!read.stale);
     assert_eq!(read.get("key"), Some(&42));
     assert_eq!(read.get("new-key"), Some(&43));
 }
@@ -56,7 +54,6 @@ fn catch_up_crosses_each_snapshot() {
 
     stale.write_tx().unwrap().end_tx().unwrap();
     let read = stale.read_tx().unwrap();
-    assert!(!read.stale);
     assert_eq!(read.get("removed"), None);
     assert_eq!(read.get("retained"), Some(&2));
     assert_eq!(read.get("latest"), Some(&3));
