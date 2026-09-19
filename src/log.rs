@@ -142,9 +142,8 @@ impl Log {
     }
 
     pub(crate) fn append(&mut self, entry: LogEntry<'_>) -> Result<()> {
-        let body = bincode::serde::encode_to_vec(entry, bincode::config::standard())?;
         let mut buffer = PayloadBuffer::default();
-        buffer.push(&body);
+        buffer.push_encoded(&entry)?;
         self.file.write_all(&buffer.bytes)?;
         self.file.sync_all()?;
         Ok(())

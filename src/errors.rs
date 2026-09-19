@@ -5,6 +5,7 @@ pub enum Error {
     Poisoned,
     MissingSnapshotLog,
     SequenceExhausted,
+    UnknownTable { table_id: usize },
     OutOfOrderSequence { current: u64, found: u64 },
     Io(io::Error),
     Encode(bincode::error::EncodeError),
@@ -22,6 +23,7 @@ impl fmt::Display for Error {
             ),
             Self::MissingSnapshotLog => write!(formatter, "snapshot log is missing"),
             Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),
+            Self::UnknownTable { table_id } => write!(formatter, "unknown table ID: {table_id}"),
             Self::OutOfOrderSequence { current, found } => {
                 write!(formatter, "log sequence number {found} precedes {current}")
             }
@@ -54,6 +56,7 @@ impl error::Error for Error {
             | Self::TrailingBytes { .. }
             | Self::Poisoned
             | Self::MissingSnapshotLog
+            | Self::UnknownTable { .. }
             | Self::OutOfOrderSequence { .. }
             | Self::SequenceExhausted => None,
         }

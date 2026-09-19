@@ -12,17 +12,20 @@ use errors::{Error, Result};
 use guard::{ReadTx, WriteTx};
 use log::{Log, LogEntry, head_entry};
 
-pub trait View: Default {
+pub trait View {
     fn log(&self) -> &Log;
     fn log_mut(&mut self) -> &mut Log;
     fn set_log(&mut self, log: Log);
 
     fn handle_events(&mut self, events: &[u8]) -> Result<()>;
     fn take_pending(&mut self) -> Vec<u8>;
-    fn snapshot_bytes(&self) -> Result<Vec<u8>>;
+    fn generate_snapshot(&mut self) -> Result<Vec<u8>>;
 
     /// Restores a view with its active log.
-    fn init(config: &Config) -> Result<Self> {
+    fn init(config: &Config) -> Result<Self>
+    where
+        Self: Default,
+    {
         let mut view = Self::default();
         let log = Log::init(config)?;
         let lock = log.write_lock()?;
@@ -32,7 +35,10 @@ pub trait View: Default {
         Ok(view)
     }
 
-    fn read_tx(&self) -> Result<ReadTx<'_, Self>> {
+    fn read_tx(&self) -> Result<ReadTx<'_, Self>>
+    where
+        Self: Sized,
+    {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
@@ -45,7 +51,10 @@ pub trait View: Default {
         })
     }
 
-    fn write_tx(&mut self) -> Result<WriteTx<'_, Self>> {
+    fn write_tx(&mut self) -> Result<WriteTx<'_, Self>>
+    where
+        Self: Sized,
+    {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
@@ -130,10 +139,13 @@ pub trait View: Default {
         Ok(())
     }
 
-    fn snapshot(&mut self) -> Result<()> {
+    fn snapshot(&mut self) -> Result<()>
+    where
+        Self: Sized,
+    {
         let mut tx = self.write_tx()?;
         tx.flush_pending()?;
-        let payload = tx.snapshot_bytes()?;
+        let payload = tx.generate_snapshot()?;
 
         let log = tx.log_mut();
         log.poisoned = true;

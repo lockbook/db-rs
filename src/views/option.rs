@@ -32,7 +32,7 @@ impl<T: Serialize + DeserializeOwned> View for DbOption<T> {
         std::mem::take(&mut self.pending_events)
     }
 
-    fn snapshot_bytes(&self) -> Result<Vec<u8>> {
+    fn generate_snapshot(&mut self) -> Result<Vec<u8>> {
         bin_encode(&self.inner)
     }
 }

@@ -10,6 +10,22 @@ impl PayloadBuffer {
         self.bytes.extend_from_slice(payload);
     }
 
+    /// On error, discard the buffer: it may contain an incomplete frame.
+    pub fn push_encoded<T: serde::Serialize>(&mut self, value: &T) -> Result<()> {
+        let start = self.bytes.len();
+        self.bytes.extend_from_slice(&0u64.to_be_bytes());
+        let payload_start = self.bytes.len();
+
+        let length = bincode::serde::encode_into_std_write(
+            value,
+            &mut self.bytes,
+            bincode::config::standard(),
+        )? as u64;
+
+        self.bytes[start..payload_start].copy_from_slice(&length.to_be_bytes());
+        Ok(())
+    }
+
     /// Advances on success; leaves input unchanged on incomplete framing.
     pub fn head_payload<'a>(remaining: &mut &'a [u8]) -> Result<Option<&'a [u8]>> {
         let buf = *remaining;
@@ -111,5 +127,21 @@ mod tests {
                 remaining_bytes: 17
             })
         ));
+    }
+
+    #[test]
+    fn push_encoded_matches_encode_then_push() {
+        let value = (300usize, b"payload".as_slice());
+        let encoded = bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap();
+
+        let mut expected = PayloadBuffer::default();
+        expected.push(b"existing");
+        expected.push(&encoded);
+
+        let mut buffer = PayloadBuffer::default();
+        buffer.push(b"existing");
+        buffer.push_encoded(&value).unwrap();
+
+        assert_eq!(buffer.bytes, expected.bytes);
     }
 }

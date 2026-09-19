@@ -65,12 +65,11 @@ where
         std::mem::take(&mut self.pending_events).bytes
     }
 
-    fn snapshot_bytes(&self) -> Result<Vec<u8>> {
+    fn generate_snapshot(&mut self) -> Result<Vec<u8>> {
         let mut snapshot = PayloadBuffer::default();
 
         for (key, value) in &self.inner {
-            let event = bin_encode(&Diff::Insert { key, value })?;
-            snapshot.push(&event);
+            snapshot.push_encoded(&Diff::Insert { key, value })?;
         }
 
         Ok(snapshot.bytes)
@@ -164,9 +163,7 @@ where
     }
 
     pub fn clear(&mut self) -> Result<()> {
-        let event = bin_encode(&Diff::<(), ()>::Clear)?;
-
-        self.pending_events.push(&event);
+        self.pending_events.push_encoded(&Diff::<(), ()>::Clear)?;
         self.inner.clear();
         Ok(())
     }
