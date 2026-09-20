@@ -21,6 +21,7 @@ pub struct DbVec<T> {
     inner: Vec<T>,
     pending_events: PayloadBuffer,
     log: Option<Log>,
+    last_modified: u64,
 }
 
 impl<T: Serialize + DeserializeOwned> View for DbVec<T> {
@@ -36,7 +37,11 @@ impl<T: Serialize + DeserializeOwned> View for DbVec<T> {
         self.log = Some(log);
     }
 
-    fn handle_events(&mut self, mut events: &[u8]) -> Result<()> {
+    fn last_modified(&self) -> u64 {
+        self.last_modified
+    }
+
+    fn handle_events(&mut self, seq_no: u64, mut events: &[u8]) -> Result<()> {
         while let Some(event) = PayloadBuffer::head_payload(&mut events)? {
             match bin_decode::<Diff<T>>(event)? {
                 Diff::Push { value } => self.inner.push(value),
@@ -61,11 +66,16 @@ impl<T: Serialize + DeserializeOwned> View for DbVec<T> {
                 Diff::Clear => self.inner.clear(),
             }
         }
+        self.last_modified = seq_no;
         Ok(())
     }
 
-    fn take_pending(&mut self) -> Vec<u8> {
-        std::mem::take(&mut self.pending_events).bytes
+    fn take_pending(&mut self, seq_no: u64) -> Vec<u8> {
+        let pending = std::mem::take(&mut self.pending_events).bytes;
+        if !pending.is_empty() {
+            self.last_modified = seq_no;
+        }
+        pending
     }
 
     fn generate_snapshot(&mut self) -> Result<Vec<u8>> {
@@ -83,6 +93,7 @@ impl<T> Default for DbVec<T> {
             inner: Vec::new(),
             pending_events: PayloadBuffer::default(),
             log: None,
+            last_modified: 0,
         }
     }
 }

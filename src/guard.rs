@@ -1,7 +1,4 @@
-use std::{
-    fs::File,
-    ops::{Deref, DerefMut},
-};
+use std::{fs::File, ops::Deref};
 
 use crate::{View, errors::Result};
 
@@ -24,40 +21,20 @@ impl<V: ?Sized> Drop for ReadTx<'_, V> {
     }
 }
 
-pub struct WriteTx<'a, V: View> {
-    pub(crate) view: &'a mut V,
+/// Holds the write lock until explicitly ended or dropped.
+/// Dropping this guard does not flush or roll back pending changes.
+#[must_use = "call end_tx(&mut view) to flush pending changes before releasing the lock"]
+pub struct WriteTx {
+    pub seq_no: u64,
     pub(crate) lock: File,
-    pub(crate) finalized: bool,
 }
 
-impl<V: View> WriteTx<'_, V> {
-    pub fn end_tx(mut self) -> Result<()> {
-        let flush_result = self.view.flush_pending();
+impl WriteTx {
+    /// Flush the view that started this transaction, then release the lock.
+    pub fn end_tx(self, view: &mut impl View) -> Result<u64> {
+        let flush_result = view.flush_pending(self.seq_no);
         let unlock_result = self.lock.unlock().map_err(Into::into);
-        self.finalized = true;
-        flush_result.and(unlock_result)
-    }
-}
-
-impl<V: View> Deref for WriteTx<'_, V> {
-    type Target = V;
-
-    fn deref(&self) -> &Self::Target {
-        self.view
-    }
-}
-
-impl<V: View> DerefMut for WriteTx<'_, V> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.view
-    }
-}
-
-impl<V: View> Drop for WriteTx<'_, V> {
-    fn drop(&mut self) {
-        if !self.finalized {
-            let _ = self.view.flush_pending();
-            let _ = self.lock.unlock();
-        }
+        flush_result.and(unlock_result)?;
+        Ok(view.log().seq_no)
     }
 }

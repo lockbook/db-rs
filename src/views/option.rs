@@ -8,6 +8,7 @@ pub struct DbOption<T> {
     inner: Option<T>,
     pending_events: Vec<u8>,
     log: Option<Log>,
+    last_modified: u64,
 }
 
 impl<T: Serialize + DeserializeOwned> View for DbOption<T> {
@@ -23,13 +24,22 @@ impl<T: Serialize + DeserializeOwned> View for DbOption<T> {
         self.log = Some(log);
     }
 
-    fn handle_events(&mut self, events: &[u8]) -> Result<()> {
+    fn last_modified(&self) -> u64 {
+        self.last_modified
+    }
+
+    fn handle_events(&mut self, seq_no: u64, events: &[u8]) -> Result<()> {
         self.inner = bin_decode(events)?;
+        self.last_modified = seq_no;
         Ok(())
     }
 
-    fn take_pending(&mut self) -> Vec<u8> {
-        std::mem::take(&mut self.pending_events)
+    fn take_pending(&mut self, seq_no: u64) -> Vec<u8> {
+        let pending = std::mem::take(&mut self.pending_events);
+        if !pending.is_empty() {
+            self.last_modified = seq_no;
+        }
+        pending
     }
 
     fn generate_snapshot(&mut self) -> Result<Vec<u8>> {
@@ -43,6 +53,7 @@ impl<T> Default for DbOption<T> {
             inner: None,
             pending_events: Vec::new(),
             log: None,
+            last_modified: 0,
         }
     }
 }

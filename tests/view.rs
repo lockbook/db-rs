@@ -3,24 +3,69 @@ use std::fs;
 use db_rs::{View, config::Config, views::hashmap::DbHashMap};
 
 #[test]
+fn write_transaction_sequence() {
+    let config = Config::test();
+    let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
+    let mut other = DbHashMap::<String, u64>::init(&config).unwrap();
+
+    let tx = db.write_tx().unwrap();
+    assert_eq!(tx.seq_no, 1);
+    assert_eq!(tx.end_tx(&mut db).unwrap(), 0);
+
+    let tx = db.write_tx().unwrap();
+    assert_eq!(tx.seq_no, 1);
+    db.insert("key".into(), 42).unwrap();
+    assert_eq!(tx.end_tx(&mut db).unwrap(), 1);
+    assert_eq!(db.last_modified(), 1);
+    db.snapshot().unwrap();
+
+    let tx = other.write_tx().unwrap();
+    assert_eq!(tx.seq_no, 2);
+    other.insert("key".into(), 43).unwrap();
+    assert_eq!(tx.end_tx(&mut other).unwrap(), 2);
+    assert_eq!(other.last_modified(), 2);
+
+    let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
+    assert_eq!(reopened.last_modified(), 2);
+    assert_eq!(reopened.get("key"), Some(&43));
+}
+
+#[test]
+fn dropping_write_transaction_does_not_flush_or_roll_back() {
+    let config = Config::test();
+    let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
+    let tx = db.write_tx().unwrap();
+    db.insert("key".into(), 42).unwrap();
+    drop(tx);
+
+    assert_eq!(db.get("key"), Some(&42));
+    let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
+    assert_eq!(reopened.get("key"), None);
+
+    db.write_tx().unwrap().end_tx(&mut db).unwrap();
+    let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
+    assert_eq!(reopened.get("key"), Some(&42));
+}
+
+#[test]
 fn write_transaction_catches_up_a_stale_view() {
     let config = Config::test();
     let mut first = DbHashMap::<String, u64>::init(&config).unwrap();
     let mut second = DbHashMap::<String, u64>::init(&config).unwrap();
 
-    first.write_tx().unwrap().insert("key".into(), 42).unwrap();
+    let tx = first.write_tx().unwrap();
+    first.insert("key".into(), 42).unwrap();
+    tx.end_tx(&mut first).unwrap();
     first.snapshot().unwrap();
-    first
-        .write_tx()
-        .unwrap()
-        .insert("new-key".into(), 43)
-        .unwrap();
+    let tx = first.write_tx().unwrap();
+    first.insert("new-key".into(), 43).unwrap();
+    tx.end_tx(&mut first).unwrap();
 
     let read = second.read_tx().unwrap();
     assert_eq!(read.get("key"), None);
     drop(read);
 
-    second.write_tx().unwrap().end_tx().unwrap();
+    second.write_tx().unwrap().end_tx(&mut second).unwrap();
 
     let read = second.read_tx().unwrap();
     assert_eq!(read.get("key"), Some(&42));
@@ -33,26 +78,23 @@ fn catch_up_crosses_each_snapshot() {
     let mut writer = DbHashMap::<String, u64>::init(&config).unwrap();
 
     {
-        let mut tx = writer.write_tx().unwrap();
-        tx.insert("removed".into(), 1).unwrap();
-        tx.insert("retained".into(), 2).unwrap();
+        let tx = writer.write_tx().unwrap();
+        writer.insert("removed".into(), 1).unwrap();
+        writer.insert("retained".into(), 2).unwrap();
+        tx.end_tx(&mut writer).unwrap();
     }
     let mut stale = DbHashMap::<String, u64>::init(&config).unwrap();
     assert_eq!(stale.get("removed"), Some(&1));
     writer.snapshot().unwrap();
-    writer
-        .write_tx()
-        .unwrap()
-        .remove(&"removed".to_owned())
-        .unwrap();
+    let tx = writer.write_tx().unwrap();
+    writer.remove(&"removed".to_owned()).unwrap();
+    tx.end_tx(&mut writer).unwrap();
     writer.snapshot().unwrap();
-    writer
-        .write_tx()
-        .unwrap()
-        .insert("latest".into(), 3)
-        .unwrap();
+    let tx = writer.write_tx().unwrap();
+    writer.insert("latest".into(), 3).unwrap();
+    tx.end_tx(&mut writer).unwrap();
 
-    stale.write_tx().unwrap().end_tx().unwrap();
+    stale.write_tx().unwrap().end_tx(&mut stale).unwrap();
     let read = stale.read_tx().unwrap();
     assert_eq!(read.get("removed"), None);
     assert_eq!(read.get("retained"), Some(&2));
@@ -72,8 +114,9 @@ fn snapshot_reduces_log_size() {
     let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
 
     for value in 0..100 {
-        db.write_tx().unwrap().insert("key".into(), value).unwrap();
-        db.flush_pending().unwrap();
+        let tx = db.write_tx().unwrap();
+        db.insert("key".into(), value).unwrap();
+        tx.end_tx(&mut db).unwrap();
     }
 
     let original_size = fs::metadata(log_location.join("db.0.log")).unwrap().len();

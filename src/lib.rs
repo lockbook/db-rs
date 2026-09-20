@@ -17,8 +17,10 @@ pub trait View {
     fn log_mut(&mut self) -> &mut Log;
     fn set_log(&mut self, log: Log);
 
-    fn handle_events(&mut self, events: &[u8]) -> Result<()>;
-    fn take_pending(&mut self) -> Vec<u8>;
+    fn last_modified(&self) -> u64;
+
+    fn handle_events(&mut self, seq_no: u64, events: &[u8]) -> Result<()>;
+    fn take_pending(&mut self, seq_no: u64) -> Vec<u8>;
     fn generate_snapshot(&mut self) -> Result<Vec<u8>>;
 
     /// Restores a view with its active log.
@@ -46,7 +48,7 @@ pub trait View {
         Ok(ReadTx { view: self, lock })
     }
 
-    fn write_tx(&mut self) -> Result<WriteTx<'_, Self>>
+    fn write_tx(&mut self) -> Result<WriteTx>
     where
         Self: Sized,
     {
@@ -61,11 +63,12 @@ pub trait View {
                 return Err(error);
             }
         };
-        Ok(WriteTx {
-            view: self,
-            lock,
-            finalized: false,
-        })
+        let seq_no = self
+            .log()
+            .seq_no
+            .checked_add(1)
+            .ok_or(Error::SequenceExhausted)?;
+        Ok(WriteTx { seq_no, lock })
     }
 
     fn catch_up(&mut self, mut lock: File) -> Result<File> {
@@ -90,7 +93,7 @@ pub trait View {
                                 found: entry_seq_no,
                             });
                         }
-                        self.handle_events(payload)?;
+                        self.handle_events(entry_seq_no, payload)?;
                         self.log_mut().seq_no = entry_seq_no;
                     }
                     LogEntry::Snapshot => {
@@ -114,23 +117,22 @@ pub trait View {
         }
     }
 
-    fn flush_pending(&mut self) -> Result<()> {
+    fn flush_pending(&mut self, seq_no: u64) -> Result<()> {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
         // Once events are drained, any failure requires reopening the database.
         self.log_mut().poisoned = true;
-        let events = self.take_pending();
+        let events = self.take_pending(seq_no);
         let log = self.log_mut();
         if !events.is_empty() {
-            let seq_no = log.seq_no.checked_add(1).ok_or(Error::SequenceExhausted)?;
             log.append(LogEntry::Events {
                 seq_no,
                 payload: &events,
             })?;
             log.seq_no = seq_no;
         }
-        log.poisoned = false;
+        self.log_mut().poisoned = false;
         Ok(())
     }
 
@@ -138,19 +140,19 @@ pub trait View {
     where
         Self: Sized,
     {
-        let mut tx = self.write_tx()?;
-        tx.flush_pending()?;
-        let payload = tx.generate_snapshot()?;
+        let tx = self.write_tx()?;
+        self.flush_pending(tx.seq_no)?;
+        let payload = self.generate_snapshot()?;
 
-        let log = tx.log_mut();
+        let log = self.log_mut();
         log.poisoned = true;
         let Some(new_log) = log.create_snapshot(log.seq_no, &payload)? else {
             log.poisoned = false;
-            return tx.end_tx();
+            return tx.end_tx(self).map(|_| ());
         };
         log.append(LogEntry::Snapshot)?;
-        tx.set_log(new_log);
+        self.set_log(new_log);
 
-        tx.end_tx()
+        tx.end_tx(self).map(|_| ())
     }
 }

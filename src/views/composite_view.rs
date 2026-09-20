@@ -17,6 +17,7 @@ pub trait Schema: Default {
 #[derive(Serialize, Deserialize)]
 struct Event<'a> {
     table_id: usize,
+    last_modified: Option<u64>,
     payload: &'a [u8],
 }
 
@@ -24,6 +25,7 @@ struct Event<'a> {
 pub struct Composite<S: Schema> {
     pub schema: S,
     log: Option<Log>,
+    last_modified: u64,
 }
 
 impl<S: Schema> View for Composite<S> {
@@ -39,7 +41,11 @@ impl<S: Schema> View for Composite<S> {
         self.log = Some(log);
     }
 
-    fn handle_events(&mut self, mut events: &[u8]) -> Result<()> {
+    fn last_modified(&self) -> u64 {
+        self.last_modified
+    }
+
+    fn handle_events(&mut self, seq_no: u64, mut events: &[u8]) -> Result<()> {
         let mut views = self.schema.views_mut();
         while let Some(bytes) = PayloadBuffer::head_payload(&mut events)? {
             let event: Event<'_> = bin_decode(bytes)?;
@@ -49,16 +55,17 @@ impl<S: Schema> View for Composite<S> {
                 .ok_or(Error::UnknownTable {
                     table_id: event.table_id,
                 })?;
-            view.handle_events(event.payload)?;
+            view.handle_events(event.last_modified.unwrap_or(seq_no), event.payload)?;
         }
 
+        self.last_modified = seq_no;
         Ok(())
     }
 
-    fn take_pending(&mut self) -> Vec<u8> {
+    fn take_pending(&mut self, seq_no: u64) -> Vec<u8> {
         let mut pending = PayloadBuffer::default();
         for (table_id, view) in self.schema.views_mut().as_mut().iter_mut().enumerate() {
-            let payload = view.take_pending();
+            let payload = view.take_pending(seq_no);
             if payload.is_empty() {
                 continue;
             }
@@ -66,11 +73,15 @@ impl<S: Schema> View for Composite<S> {
             pending
                 .push_encoded(&Event {
                     table_id,
+                    last_modified: None,
                     payload: &payload,
                 })
                 .expect("encoding a table ID and byte slice cannot fail");
         }
 
+        if !pending.bytes.is_empty() {
+            self.last_modified = seq_no;
+        }
         pending.bytes
     }
 
@@ -80,6 +91,7 @@ impl<S: Schema> View for Composite<S> {
             let payload = view.generate_snapshot()?;
             snapshot.push_encoded(&Event {
                 table_id,
+                last_modified: Some(view.last_modified()),
                 payload: &payload,
             })?;
         }
@@ -119,11 +131,15 @@ mod tests {
             .unwrap();
         source.schema.settings.replace("dark".into()).unwrap();
 
-        let events = source.take_pending();
-        assert!(source.take_pending().is_empty());
+        let events = source.take_pending(1);
+        assert_eq!(source.last_modified(), 1);
+        assert_eq!(source.schema.users.last_modified(), 1);
+        assert_eq!(source.schema.settings.last_modified(), 1);
+        assert!(source.take_pending(2).is_empty());
+        assert_eq!(source.last_modified(), 1);
 
         let mut db = Composite::<TestSchema>::default();
-        db.handle_events(&events).unwrap();
+        db.handle_events(1, &events).unwrap();
 
         assert_eq!(
             db.schema.users.get("alice").map(String::as_str),
@@ -133,16 +149,19 @@ mod tests {
             db.schema.settings.as_ref().map(String::as_str),
             Some("dark")
         );
-        assert!(db.take_pending().is_empty());
+        assert!(db.take_pending(1).is_empty());
     }
 
     #[test]
     fn take_pending_skips_unchanged_views() {
         let mut db = Composite::<TestSchema>::default();
-        assert!(db.take_pending().is_empty());
+        assert!(db.take_pending(1).is_empty());
         db.schema.settings.replace("dark".into()).unwrap();
 
-        let events = db.take_pending();
+        let events = db.take_pending(1);
+        assert_eq!(db.last_modified(), 1);
+        assert_eq!(db.schema.users.last_modified(), 0);
+        assert_eq!(db.schema.settings.last_modified(), 1);
         let mut remaining = events.as_slice();
         let bytes = PayloadBuffer::head_payload(&mut remaining)
             .unwrap()
@@ -155,7 +174,7 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert!(db.take_pending().is_empty());
+        assert!(db.take_pending(1).is_empty());
     }
 
     #[test]
@@ -164,13 +183,13 @@ mod tests {
         {
             let mut db = Composite::<TestSchema>::init(&config).unwrap();
             {
-                let mut tx = db.write_tx().unwrap();
-                tx.schema
+                let tx = db.write_tx().unwrap();
+                db.schema
                     .users
                     .insert("alice".into(), "Alice".into())
                     .unwrap();
-                tx.schema.settings.replace("dark".into()).unwrap();
-                tx.end_tx().unwrap();
+                db.schema.settings.replace("dark".into()).unwrap();
+                tx.end_tx(&mut db).unwrap();
             }
             db.snapshot().unwrap();
         }
@@ -193,6 +212,7 @@ mod tests {
             events.push(
                 &bin_encode(&Event {
                     table_id,
+                    last_modified: None,
                     payload: b"",
                 })
                 .unwrap(),
@@ -200,7 +220,7 @@ mod tests {
 
             let mut db = Composite::<TestSchema>::default();
             assert!(matches!(
-                db.handle_events(&events.bytes),
+                db.handle_events(1, &events.bytes),
                 Err(Error::UnknownTable { table_id: found }) if found == table_id
             ));
         }

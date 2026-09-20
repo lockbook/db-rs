@@ -20,8 +20,28 @@ fn reader_blocks_another_process_writer() {
     drop(read);
 
     finish_worker(&mut worker, &mut socket);
-    db.write_tx().unwrap().end_tx().unwrap();
+    db.write_tx().unwrap().end_tx(&mut db).unwrap();
     assert_eq!(db.read_tx().unwrap().get("child"), Some(&2));
+}
+
+#[test]
+fn stale_reader_blocks_another_process_writer_after_snapshot() {
+    let config = Config::test();
+    let reader = DbHashMap::<String, u64>::init(&config).unwrap();
+    let mut writer = DbHashMap::<String, u64>::init(&config).unwrap();
+    let tx = writer.write_tx().unwrap();
+    writer.insert("parent".into(), 1).unwrap();
+    tx.end_tx(&mut writer).unwrap();
+    writer.snapshot().unwrap();
+    let (mut worker, mut socket) = spawn_worker(&config);
+
+    let read = reader.read_tx().unwrap();
+    start_and_expect_blocked(&mut socket);
+    drop(read);
+
+    finish_worker(&mut worker, &mut socket);
+    writer.write_tx().unwrap().end_tx(&mut writer).unwrap();
+    assert_eq!(writer.get("child"), Some(&2));
 }
 
 #[test]
@@ -30,13 +50,34 @@ fn writers_serialize_across_processes() {
     let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
     let (mut worker, mut socket) = spawn_worker(&config);
 
-    let mut write = db.write_tx().unwrap();
-    write.insert("parent".into(), 1).unwrap();
+    let write = db.write_tx().unwrap();
+    db.insert("parent".into(), 1).unwrap();
     start_and_expect_blocked(&mut socket);
-    write.end_tx().unwrap();
+    write.end_tx(&mut db).unwrap();
 
     finish_worker(&mut worker, &mut socket);
-    db.write_tx().unwrap().end_tx().unwrap();
+    db.write_tx().unwrap().end_tx(&mut db).unwrap();
+    let read = db.read_tx().unwrap();
+    assert_eq!(read.get("parent"), Some(&1));
+    assert_eq!(read.get("child"), Some(&2));
+}
+
+#[test]
+fn writers_on_different_logs_serialize_across_processes() {
+    let config = Config::test();
+    let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
+    let (mut worker, mut socket) = spawn_worker(&config);
+    let tx = db.write_tx().unwrap();
+    db.insert("parent".into(), 1).unwrap();
+    tx.end_tx(&mut db).unwrap();
+    db.snapshot().unwrap();
+
+    let write = db.write_tx().unwrap();
+    start_and_expect_blocked(&mut socket);
+    write.end_tx(&mut db).unwrap();
+
+    finish_worker(&mut worker, &mut socket);
+    db.write_tx().unwrap().end_tx(&mut db).unwrap();
     let read = db.read_tx().unwrap();
     assert_eq!(read.get("parent"), Some(&1));
     assert_eq!(read.get("child"), Some(&2));
@@ -55,10 +96,10 @@ fn ipc_worker() {
     send(&mut socket, b'R');
     assert_eq!(receive(&mut socket), b'G');
     send(&mut socket, b'A');
-    let mut write = db.write_tx().unwrap();
+    let write = db.write_tx().unwrap();
     send(&mut socket, b'L');
-    write.insert("child".into(), 2).unwrap();
-    write.end_tx().unwrap();
+    db.insert("child".into(), 2).unwrap();
+    write.end_tx(&mut db).unwrap();
     send(&mut socket, b'D');
 }
 

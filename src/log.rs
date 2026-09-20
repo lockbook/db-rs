@@ -204,7 +204,7 @@ impl Log {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::{self, File};
+    use std::fs::{self, File, OpenOptions, TryLockError};
 
     use super::{Log, LogEntry, head_entry};
     use crate::config::Config;
@@ -217,6 +217,28 @@ mod tests {
 
         assert!(config.log_location.join("db.0.log").is_file());
         drop(log);
+    }
+
+    #[test]
+    fn locks_use_a_separate_database_file() {
+        let config = Config::test();
+        let log = Log::init(&config).unwrap();
+        let lock = log.write_lock().unwrap();
+
+        let database_lock = File::open(config.log_location.join("db.lock")).unwrap();
+        assert!(matches!(
+            database_lock.try_lock_shared(),
+            Err(TryLockError::WouldBlock)
+        ));
+
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(config.log_location.join("db.0.log"))
+            .unwrap();
+        data.try_lock().unwrap();
+        data.unlock().unwrap();
+        lock.unlock().unwrap();
     }
 
     #[test]

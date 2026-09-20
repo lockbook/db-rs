@@ -5,15 +5,15 @@ fn round_trip() {
     let config = Config::test();
     {
         let mut db = DbVec::<u64>::init(&config).unwrap();
-        let mut tx = db.write_tx().unwrap();
-        assert_eq!(tx.pop().unwrap(), None);
-        tx.push(1).unwrap();
-        tx.push(3).unwrap();
-        tx.insert(1, 2).unwrap();
-        tx.insert(3, 4).unwrap();
-        assert_eq!(tx.remove(0).unwrap(), 1);
-        assert_eq!(tx.pop().unwrap(), Some(4));
-        tx.end_tx().unwrap();
+        let tx = db.write_tx().unwrap();
+        assert_eq!(db.pop().unwrap(), None);
+        db.push(1).unwrap();
+        db.push(3).unwrap();
+        db.insert(1, 2).unwrap();
+        db.insert(3, 4).unwrap();
+        assert_eq!(db.remove(0).unwrap(), 1);
+        assert_eq!(db.pop().unwrap(), Some(4));
+        tx.end_tx(&mut db).unwrap();
     }
 
     let mut db = DbVec::<u64>::init(&config).unwrap();
@@ -22,7 +22,9 @@ fn round_trip() {
     assert_eq!(db.get(1), Some(&3));
     assert_eq!(db.get(2), None);
     assert_eq!(db.iter().copied().collect::<Vec<_>>(), [2, 3]);
-    db.write_tx().unwrap().clear().unwrap();
+    let tx = db.write_tx().unwrap();
+    db.clear().unwrap();
+    tx.end_tx(&mut db).unwrap();
     drop(db);
 
     let db = DbVec::<u64>::init(&config).unwrap();
@@ -36,21 +38,28 @@ fn snapshots_preserve_order_during_reopen_and_catch_up() {
     let mut stale = DbVec::<u64>::init(&config).unwrap();
 
     {
-        let mut tx = writer.write_tx().unwrap();
-        tx.push(1).unwrap();
-        tx.push(2).unwrap();
+        let tx = writer.write_tx().unwrap();
+        writer.push(1).unwrap();
+        writer.push(2).unwrap();
+        tx.end_tx(&mut writer).unwrap();
     }
     writer.snapshot().unwrap();
-    writer.write_tx().unwrap().remove(0).unwrap();
+    let tx = writer.write_tx().unwrap();
+    writer.remove(0).unwrap();
+    tx.end_tx(&mut writer).unwrap();
     writer.snapshot().unwrap();
-    writer.write_tx().unwrap().push(3).unwrap();
+    let tx = writer.write_tx().unwrap();
+    writer.push(3).unwrap();
+    tx.end_tx(&mut writer).unwrap();
 
-    stale.write_tx().unwrap().end_tx().unwrap();
+    stale.write_tx().unwrap().end_tx(&mut stale).unwrap();
     assert_eq!(stale.as_slice(), &[2, 3]);
     let fresh = DbVec::<u64>::init(&config).unwrap();
     assert_eq!(fresh.as_slice(), &[2, 3]);
 
-    writer.write_tx().unwrap().clear().unwrap();
+    let tx = writer.write_tx().unwrap();
+    writer.clear().unwrap();
+    tx.end_tx(&mut writer).unwrap();
     writer.snapshot().unwrap();
     let fresh = DbVec::<u64>::init(&config).unwrap();
     assert!(fresh.is_empty());
@@ -60,7 +69,7 @@ fn snapshots_preserve_order_during_reopen_and_catch_up() {
 fn invalid_indices_leave_the_view_and_pending_events_unchanged() {
     let mut view = DbVec::new();
     view.push(42u64).unwrap();
-    view.take_pending();
+    view.take_pending(1);
 
     assert!(matches!(
         view.insert(2, 99),
@@ -71,5 +80,5 @@ fn invalid_indices_leave_the_view_and_pending_events_unchanged() {
         Err(Error::IndexOutOfBounds { index: 1, len: 1 })
     ));
     assert_eq!(view.as_slice(), &[42]);
-    assert!(view.take_pending().is_empty());
+    assert!(view.take_pending(2).is_empty());
 }

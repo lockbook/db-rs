@@ -7,19 +7,19 @@ fn round_trip() {
     let config = Config::test();
     {
         let mut db = DbHashMapSet::<u64, u64>::init(&config).unwrap();
-        let mut tx = db.write_tx().unwrap();
-        assert!(tx.insert(1, 10).unwrap());
-        assert!(!tx.insert(1, 10).unwrap());
-        tx.insert(1, 20).unwrap();
-        assert!(tx.remove(&1, &10).unwrap());
-        assert!(!tx.remove(&1, &10).unwrap());
-        assert!(!tx.remove(&99, &10).unwrap());
-        tx.insert(2, 30).unwrap();
-        assert_eq!(tx.create_key(2).unwrap(), Some(HashSet::from([30])));
-        tx.insert(3, 40).unwrap();
-        assert_eq!(tx.clear_key(&3).unwrap(), Some(HashSet::from([40])));
-        assert_eq!(tx.clear_key(&3).unwrap(), None);
-        tx.end_tx().unwrap();
+        let tx = db.write_tx().unwrap();
+        assert!(db.insert(1, 10).unwrap());
+        assert!(!db.insert(1, 10).unwrap());
+        db.insert(1, 20).unwrap();
+        assert!(db.remove(&1, &10).unwrap());
+        assert!(!db.remove(&1, &10).unwrap());
+        assert!(!db.remove(&99, &10).unwrap());
+        db.insert(2, 30).unwrap();
+        assert_eq!(db.create_key(2).unwrap(), Some(HashSet::from([30])));
+        db.insert(3, 40).unwrap();
+        assert_eq!(db.clear_key(&3).unwrap(), Some(HashSet::from([40])));
+        assert_eq!(db.clear_key(&3).unwrap(), None);
+        tx.end_tx(&mut db).unwrap();
     }
 
     let mut db = DbHashMapSet::<u64, u64>::init(&config).unwrap();
@@ -28,7 +28,9 @@ fn round_trip() {
     assert!(!db.contains_key(&3));
     assert_eq!(db.len(), 2);
     assert_eq!(db.iter().count(), 2);
-    db.write_tx().unwrap().clear().unwrap();
+    let tx = db.write_tx().unwrap();
+    db.clear().unwrap();
+    tx.end_tx(&mut db).unwrap();
     drop(db);
 
     let db = DbHashMapSet::<u64, u64>::init(&config).unwrap();
@@ -41,12 +43,13 @@ fn snapshot_preserves_members_and_empty_groups() {
     {
         let mut db = DbHashMapSet::<u64, u64>::init(&config).unwrap();
         {
-            let mut tx = db.write_tx().unwrap();
-            tx.insert(1, 10).unwrap();
-            tx.insert(1, 20).unwrap();
-            assert_eq!(tx.create_key(2).unwrap(), None);
-            tx.insert(3, 30).unwrap();
-            tx.remove(&3, &30).unwrap();
+            let tx = db.write_tx().unwrap();
+            db.insert(1, 10).unwrap();
+            db.insert(1, 20).unwrap();
+            assert_eq!(db.create_key(2).unwrap(), None);
+            db.insert(3, 30).unwrap();
+            db.remove(&3, &30).unwrap();
+            tx.end_tx(&mut db).unwrap();
         }
         db.snapshot().unwrap();
     }

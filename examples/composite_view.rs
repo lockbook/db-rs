@@ -29,11 +29,11 @@ fn main() -> Result<()> {
     {
         let mut db = Composite::<AppSchema>::init(&config)?;
 
-        let mut tx = db.write_tx()?;
-        tx.schema.users.insert("alice".into(), "Alice".into())?;
-        tx.schema.users.insert("bob".into(), "Bob".into())?;
-        tx.schema.settings.replace("dark".into())?;
-        tx.end_tx()?;
+        let tx = db.write_tx()?;
+        db.schema.users.insert("alice".into(), "Alice".into())?;
+        db.schema.users.insert("bob".into(), "Bob".into())?;
+        db.schema.settings.replace("dark".into())?;
+        tx.end_tx(&mut db)?;
 
         db.snapshot()?;
     }

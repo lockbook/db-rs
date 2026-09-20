@@ -7,14 +7,14 @@ fn round_trip() {
         let mut db = DbOption::<String>::init(&config).unwrap();
         assert!(db.read_tx().unwrap().is_none());
         {
-            let mut view = db.write_tx().unwrap();
-            assert_eq!(view.replace("first".into()).unwrap(), None);
+            let tx = db.write_tx().unwrap();
+            assert_eq!(db.replace("first".into()).unwrap(), None);
             assert_eq!(
-                view.replace("second".into()).unwrap().as_deref(),
+                db.replace("second".into()).unwrap().as_deref(),
                 Some("first")
             );
+            tx.end_tx(&mut db).unwrap();
         }
-        db.flush_pending().unwrap();
     }
 
     let mut db = DbOption::<String>::init(&config).unwrap();
@@ -22,11 +22,9 @@ fn round_trip() {
         db.read_tx().unwrap().as_ref().map(String::as_str),
         Some("second")
     );
-    assert_eq!(
-        db.write_tx().unwrap().take().unwrap().as_deref(),
-        Some("second")
-    );
-    db.flush_pending().unwrap();
+    let tx = db.write_tx().unwrap();
+    assert_eq!(db.take().unwrap().as_deref(), Some("second"));
+    tx.end_tx(&mut db).unwrap();
     drop(db);
 
     let db = DbOption::<String>::init(&config).unwrap();
@@ -39,11 +37,13 @@ fn snapshots_preserve_some_and_none() {
         let config = Config::test();
         {
             let mut db = DbOption::<u64>::init(&config).unwrap();
-            db.write_tx().unwrap().replace(42).unwrap();
-            db.flush_pending().unwrap();
+            let tx = db.write_tx().unwrap();
+            db.replace(42).unwrap();
+            tx.end_tx(&mut db).unwrap();
             if clear {
-                db.write_tx().unwrap().take().unwrap();
-                db.flush_pending().unwrap();
+                let tx = db.write_tx().unwrap();
+                db.take().unwrap();
+                tx.end_tx(&mut db).unwrap();
             }
             db.snapshot().unwrap();
         }

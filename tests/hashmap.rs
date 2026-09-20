@@ -8,10 +8,11 @@ fn round_trip() {
     {
         let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
         {
-            let mut view = db.write_tx().unwrap();
-            view.insert("one".into(), 1).unwrap();
-            view.insert("two".into(), 2).unwrap();
-            view.insert("three".into(), 3).unwrap();
+            let tx = db.write_tx().unwrap();
+            db.insert("one".into(), 1).unwrap();
+            db.insert("two".into(), 2).unwrap();
+            db.insert("three".into(), 3).unwrap();
+            tx.end_tx(&mut db).unwrap();
         }
     }
 
