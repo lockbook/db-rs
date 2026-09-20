@@ -2,6 +2,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
     path::{Path, PathBuf},
+    sync::mpsc::{self, Receiver, Sender},
 };
 
 use serde::{Deserialize, Serialize};
@@ -34,12 +35,19 @@ pub(crate) fn head_entry<'a>(remaining: &mut &'a [u8]) -> Result<Option<LogEntry
     Ok(Some(entry))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Notification {
+    pub local: bool,
+    pub seq_no: u64,
+}
+
 pub struct Log {
     file: File,
     path: PathBuf,
     directory: PathBuf,
     pub(crate) seq_no: u64,
     pub(crate) poisoned: bool,
+    notifications: Option<Sender<Notification>>,
 }
 
 impl Log {
@@ -64,7 +72,23 @@ impl Log {
             directory,
             seq_no: 0,
             poisoned: false,
+            notifications: None,
         })
+    }
+
+    pub fn notifications(&mut self) -> Receiver<Notification> {
+        let (sender, receiver) = mpsc::channel();
+        self.notifications = Some(sender);
+        receiver
+    }
+
+    pub(crate) fn notify(&self, local: bool) {
+        if let Some(sender) = &self.notifications {
+            let _ = sender.send(Notification {
+                local,
+                seq_no: self.seq_no,
+            });
+        }
     }
 
     pub fn find_latest(config: &Config) -> io::Result<Option<PathBuf>> {
@@ -102,7 +126,7 @@ impl Log {
             .ok()
     }
 
-    pub(crate) fn find_next(&self) -> io::Result<Option<Self>> {
+    pub(crate) fn find_next(&self) -> io::Result<Option<PathBuf>> {
         let current = Self::log_sequence(self.path.file_name().expect("log path has a file name"))
             .expect("active log has a numbered file name");
         let mut next: Option<(u64, fs::DirEntry)> = None;
@@ -126,30 +150,40 @@ impl Log {
             }
         }
 
-        let Some((_, entry)) = next else {
-            return Ok(None);
-        };
-
-        let path = entry.path();
-        let file = OpenOptions::new().read(true).append(true).open(&path)?;
-        Ok(Some(Self {
-            file,
-            path,
-            directory: self.directory.clone(),
-            seq_no: self.seq_no,
-            poisoned: false,
-        }))
+        Ok(next.map(|(_, entry)| entry.path()))
     }
 
-    pub(crate) fn append(&mut self, entry: LogEntry<'_>) -> Result<()> {
-        let mut buffer = PayloadBuffer::default();
-        buffer.push_encoded(&entry)?;
-        self.file.write_all(&buffer.bytes)?;
-        self.file.sync_all()?;
+    pub(crate) fn follow_snapshot(&mut self, lock: File) -> Result<File> {
+        let path = self.find_next()?.ok_or(Error::MissingSnapshotLog)?;
+        let new_lock = OpenOptions::new().read(true).write(true).open(&path)?;
+        new_lock.lock()?;
+        let file = OpenOptions::new().read(true).append(true).open(&path)?;
+        lock.unlock()?;
+        self.file = file;
+        self.path = path;
+        Ok(new_lock)
+    }
+
+    pub(crate) fn switch_to(&mut self, path: PathBuf) -> io::Result<()> {
+        let file = OpenOptions::new().read(true).append(true).open(&path)?;
+        self.file = file;
+        self.path = path;
         Ok(())
     }
 
-    pub(crate) fn create_snapshot(&self, seq_no: u64, payload: &[u8]) -> Result<Option<Self>> {
+    pub(crate) fn append(&mut self, entry: LogEntry<'_>) -> Result<()> {
+        Self::append_to(&mut self.file, entry)
+    }
+
+    fn append_to(file: &mut File, entry: LogEntry<'_>) -> Result<()> {
+        let mut buffer = PayloadBuffer::default();
+        buffer.push_encoded(&entry)?;
+        file.write_all(&buffer.bytes)?;
+        file.sync_all()?;
+        Ok(())
+    }
+
+    pub(crate) fn create_snapshot(&self, seq_no: u64, payload: &[u8]) -> Result<Option<PathBuf>> {
         let path = self.directory.join(format!("db.{seq_no}.log"));
         if path == self.path {
             return Ok(None);
@@ -157,30 +191,16 @@ impl Log {
 
         let temporary_path = self.directory.join(format!("db.{seq_no}.tmp"));
         {
-            let file = OpenOptions::new()
+            let mut file = OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(true)
                 .open(&temporary_path)?;
-            let mut snapshot = Self {
-                file,
-                path: temporary_path.clone(),
-                directory: self.directory.clone(),
-                seq_no,
-                poisoned: false,
-            };
-            snapshot.append(LogEntry::Events { seq_no, payload })?;
+            Self::append_to(&mut file, LogEntry::Events { seq_no, payload })?;
         }
         fs::rename(temporary_path, &path)?;
 
-        let file = OpenOptions::new().read(true).append(true).open(&path)?;
-        Ok(Some(Self {
-            file,
-            path,
-            directory: self.directory.clone(),
-            seq_no,
-            poisoned: false,
-        }))
+        Ok(Some(path))
     }
 
     pub fn get_bytes(&mut self) -> io::Result<Vec<u8>> {
@@ -307,7 +327,7 @@ mod tests {
         }
 
         assert_eq!(
-            log.find_next().unwrap().unwrap().path,
+            log.find_next().unwrap().unwrap(),
             config.log_location.join("db.9.log")
         );
     }

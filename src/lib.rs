@@ -72,6 +72,7 @@ pub trait View {
     }
 
     fn catch_up(&mut self, mut lock: File) -> Result<File> {
+        let initial_seq_no = self.log().seq_no;
         loop {
             let bytes = self.log_mut().get_bytes()?;
             let mut remaining = bytes.as_slice();
@@ -104,16 +105,13 @@ pub trait View {
             }
 
             if !snapshot {
+                if self.log().seq_no != initial_seq_no {
+                    self.log().notify(false);
+                }
                 return Ok(lock);
             }
 
-            let Some(new_log) = self.log().find_next()? else {
-                return Err(Error::MissingSnapshotLog);
-            };
-            let new_lock = new_log.write_lock()?;
-            lock.unlock()?;
-            self.set_log(new_log);
-            lock = new_lock;
+            lock = self.log_mut().follow_snapshot(lock)?;
         }
     }
 
@@ -131,6 +129,8 @@ pub trait View {
                 payload: &events,
             })?;
             log.seq_no = seq_no;
+            log.poisoned = false;
+            log.notify(true);
         }
         self.log_mut().poisoned = false;
         Ok(())
@@ -146,12 +146,13 @@ pub trait View {
 
         let log = self.log_mut();
         log.poisoned = true;
-        let Some(new_log) = log.create_snapshot(log.seq_no, &payload)? else {
+        let Some(path) = log.create_snapshot(log.seq_no, &payload)? else {
             log.poisoned = false;
             return tx.end_tx(self).map(|_| ());
         };
         log.append(LogEntry::Snapshot)?;
-        self.set_log(new_log);
+        log.switch_to(path)?;
+        log.poisoned = false;
 
         tx.end_tx(self).map(|_| ())
     }
