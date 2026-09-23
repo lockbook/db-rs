@@ -3,6 +3,7 @@ use std::sync::mpsc::TryRecvError;
 use db_rs::{
     View,
     config::Config,
+    errors::Error,
     log::{Log, Notification},
     views::{
         composite_view::{Composite, Schema},
@@ -85,7 +86,7 @@ fn persistent_init_does_not_fall_back_to_memory() {
 
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
 #[cfg_attr(not(target_family = "wasm"), test)]
-fn dropping_a_write_does_not_flush() {
+fn dropping_dirty_write_requires_reinitializing() {
     let mut db = DbHashMap::<u64, u64>::init(&Config::in_memory()).unwrap();
     let tx = db.write_tx().unwrap();
     db.insert(1, 42).unwrap();
@@ -93,8 +94,25 @@ fn dropping_a_write_does_not_flush() {
 
     assert_eq!(db.last_modified(), 0);
     assert_eq!(db.get(&1), Some(&42));
-    assert_eq!(db.write_tx().unwrap().end_tx(&mut db).unwrap(), 1);
-    assert_eq!(db.last_modified(), 1);
+    assert!(matches!(db.write_tx(), Err(Error::Poisoned)));
+    assert!(matches!(db.write_tx(), Err(Error::Poisoned)));
+    assert_eq!(db.last_modified(), 0);
+
+    let mut fresh = DbHashMap::<u64, u64>::init(&Config::in_memory()).unwrap();
+    assert!(fresh.is_empty());
+    assert_eq!(fresh.write_tx().unwrap().end_tx(&mut fresh).unwrap(), 0);
+}
+
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+#[cfg_attr(not(target_family = "wasm"), test)]
+fn dropping_empty_write_is_harmless() {
+    let mut db = DbHashMap::<u64, u64>::init(&Config::in_memory()).unwrap();
+    drop(db.write_tx().unwrap());
+
+    let tx = db.write_tx().unwrap();
+    db.insert(1, 42).unwrap();
+    assert_eq!(tx.end_tx(&mut db).unwrap(), 1);
+    assert_eq!(db.read_tx().unwrap().get(&1), Some(&42));
 }
 
 #[derive(Default)]
@@ -117,6 +135,20 @@ impl Schema for TestSchema {
         ];
         views
     }
+}
+
+#[cfg_attr(target_family = "wasm", wasm_bindgen_test)]
+#[cfg_attr(not(target_family = "wasm"), test)]
+fn dropped_composite_edits_poison_the_database() {
+    let mut db = Composite::<TestSchema>::init(&Config::in_memory()).unwrap();
+    let tx = db.write_tx().unwrap();
+    db.schema.map.insert(1, 42).unwrap();
+    db.schema.option.replace(43).unwrap();
+    drop(tx);
+
+    assert!(matches!(db.write_tx(), Err(Error::Poisoned)));
+    assert!(matches!(db.write_tx(), Err(Error::Poisoned)));
+    assert!(matches!(db.snapshot(), Err(Error::Poisoned)));
 }
 
 #[cfg_attr(target_family = "wasm", wasm_bindgen_test)]

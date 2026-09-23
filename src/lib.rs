@@ -53,6 +53,14 @@ pub trait View {
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
+        // Pending edits from an unfinished transaction cannot be carried into a new one.
+        self.log_mut().poisoned = true;
+        let seq_no = self.log().seq_no;
+        if !self.take_pending(seq_no).is_empty() {
+            return Err(Error::Poisoned);
+        }
+        self.log_mut().poisoned = false;
+
         let lock = self.log().write_lock()?;
         let lock = match self.catch_up(lock) {
             Ok(lock) => lock,

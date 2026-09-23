@@ -1,5 +1,13 @@
 # db-rs
 
+## Transactions
+
+Make edits after `write_tx()` succeeds, then commit them with `end_tx(&mut view)`.
+Dropping the transaction releases its lock without committing or rolling back.
+If pending edits remain, the next `write_tx()` returns `Error::Poisoned` before
+catching up or writing anything. Discard the view and reopen the database;
+retrying cannot commit those edits. Dropping an empty transaction is harmless.
+
 ## In-memory and WebAssembly
 
 Use `Config::in_memory()` on `wasm32-unknown-unknown`, or for an in-memory

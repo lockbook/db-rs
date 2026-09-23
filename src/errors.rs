@@ -20,7 +20,7 @@ impl fmt::Display for Error {
         match self {
             Self::Poisoned => write!(
                 formatter,
-                "transaction failed; reopen the database before continuing"
+                "transaction failed or was left unfinished; reopen the database before continuing"
             ),
             Self::MissingSnapshotLog => write!(formatter, "snapshot log is missing"),
             Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),

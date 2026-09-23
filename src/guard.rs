@@ -34,6 +34,8 @@ impl<V: ?Sized> Drop for ReadTx<'_, V> {
 
 /// Holds the write lock until explicitly ended or dropped.
 /// Dropping this guard does not flush or roll back pending changes.
+/// If edits remain, the next `write_tx()` poisons the view and returns an error;
+/// discard the view and reopen the database. Dropping an empty transaction is harmless.
 #[must_use = "call end_tx(&mut view) to flush pending changes before releasing the lock"]
 pub struct WriteTx {
     pub seq_no: u64,

@@ -1,6 +1,6 @@
 use std::fs::{self, OpenOptions, TryLockError};
 
-use db_rs::{View, config::Config, views::hashmap::DbHashMap};
+use db_rs::{View, config::Config, errors::Error, views::hashmap::DbHashMap};
 
 #[test]
 fn read_transactions_release_their_locks_independently() {
@@ -51,7 +51,7 @@ fn write_transaction_sequence() {
 }
 
 #[test]
-fn dropping_write_transaction_does_not_flush_or_roll_back() {
+fn dropping_dirty_write_transaction_requires_reopening() {
     let config = Config::test();
     let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
     let tx = db.write_tx().unwrap();
@@ -62,7 +62,54 @@ fn dropping_write_transaction_does_not_flush_or_roll_back() {
     let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
     assert_eq!(reopened.get("key"), None);
 
-    db.write_tx().unwrap().end_tx(&mut db).unwrap();
+    assert!(matches!(db.write_tx(), Err(Error::Poisoned)));
+    assert!(matches!(db.write_tx(), Err(Error::Poisoned)));
+    assert!(matches!(db.read_tx(), Err(Error::Poisoned)));
+    assert!(matches!(db.snapshot(), Err(Error::Poisoned)));
+
+    let mut reopened = DbHashMap::<String, u64>::init(&config).unwrap();
+    assert_eq!(reopened.get("key"), None);
+    let tx = reopened.write_tx().unwrap();
+    reopened.insert("key".into(), 43).unwrap();
+    tx.end_tx(&mut reopened).unwrap();
+    let fresh = DbHashMap::<String, u64>::init(&config).unwrap();
+    assert_eq!(fresh.get("key"), Some(&43));
+}
+
+#[test]
+fn dropped_dirty_transaction_is_rejected_before_catch_up() {
+    let config = Config::test();
+    let mut dirty = DbHashMap::<String, u64>::init(&config).unwrap();
+    let mut other = DbHashMap::<String, u64>::init(&config).unwrap();
+
+    let tx = dirty.write_tx().unwrap();
+    dirty.insert("key".into(), 20).unwrap();
+    drop(tx);
+
+    let tx = other.write_tx().unwrap();
+    other.insert("key".into(), 10).unwrap();
+    tx.end_tx(&mut other).unwrap();
+
+    assert!(matches!(dirty.write_tx(), Err(Error::Poisoned)));
+    assert!(matches!(dirty.write_tx(), Err(Error::Poisoned)));
+    assert_eq!(dirty.get("key"), Some(&20));
+    assert_eq!(dirty.last_modified(), 0);
+
+    let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
+    assert_eq!(reopened.get("key"), Some(&10));
+}
+
+#[test]
+fn dropping_empty_write_transaction_is_harmless() {
+    let config = Config::test();
+    let mut db = DbHashMap::<String, u64>::init(&config).unwrap();
+    drop(db.write_tx().unwrap());
+
+    let tx = db.write_tx().unwrap();
+    assert_eq!(tx.seq_no, 1);
+    db.insert("key".into(), 42).unwrap();
+    tx.end_tx(&mut db).unwrap();
+
     let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
     assert_eq!(reopened.get("key"), Some(&42));
 }
