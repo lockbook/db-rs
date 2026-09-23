@@ -161,12 +161,6 @@ impl Log {
         Ok(next.map(|(_, entry)| entry.path()))
     }
 
-    pub(crate) fn follow_snapshot(&mut self) -> Result<()> {
-        let path = self.find_next()?.ok_or(Error::MissingSnapshotLog)?;
-        self.switch_to(path)?;
-        Ok(())
-    }
-
     pub(crate) fn switch_to(&mut self, path: PathBuf) -> io::Result<()> {
         let file = OpenOptions::new().read(true).append(true).open(&path)?;
         self.file = Some(file);
@@ -189,7 +183,7 @@ impl Log {
         Ok(())
     }
 
-    pub(crate) fn create_snapshot(&self, seq_no: u64, payload: &[u8]) -> Result<Option<PathBuf>> {
+    pub(crate) fn prepare_snapshot(&self, seq_no: u64, payload: &[u8]) -> Result<Option<PathBuf>> {
         if self.file.is_none() {
             return Ok(None);
         }
@@ -207,9 +201,11 @@ impl Log {
                 .open(&temporary_path)?;
             Self::append_to(&mut file, LogEntry::Events { seq_no, payload })?;
         }
-        fs::rename(temporary_path, &path)?;
-
         Ok(Some(path))
+    }
+
+    pub(crate) fn publish_snapshot(&self, path: &Path) -> io::Result<()> {
+        fs::rename(path.with_extension("tmp"), path)
     }
 
     pub fn get_bytes(&mut self) -> io::Result<Vec<u8>> {
@@ -315,6 +311,47 @@ mod tests {
         }
         assert!(head_entry(&mut remaining).unwrap().is_none());
         lock.unlock().unwrap();
+    }
+
+    #[test]
+    fn snapshot_recovery_rejects_pending_edits() {
+        use crate::{View, errors::Error, views::hashmap::DbHashMap};
+
+        type Map = DbHashMap<u64, u64>;
+
+        let config = Config::test();
+        let mut committed = Map::init(&config).unwrap();
+        let mut dirty = Map::init(&config).unwrap();
+
+        let tx = dirty.write_tx().unwrap();
+        dirty.insert(2, 20).unwrap();
+        drop(tx);
+
+        let tx = committed.write_tx().unwrap();
+        committed.insert(1, 10).unwrap();
+        tx.end_tx(&mut committed).unwrap();
+
+        // Leave a snapshot marker with neither a published nor a temporary snapshot.
+        let tx = committed.write_tx().unwrap();
+        committed.log_mut().append(LogEntry::Snapshot).unwrap();
+        tx.end_tx(&mut committed).unwrap();
+        drop(committed);
+
+        assert!(matches!(dirty.write_tx(), Err(Error::Poisoned)));
+        assert!(matches!(dirty.write_tx(), Err(Error::Poisoned)));
+        assert!(!config.log_location.join("db.1.log").exists());
+        assert!(!config.log_location.join("db.1.tmp").exists());
+
+        // A fresh view can recover using only the committed log history.
+        let recovered = Map::init(&config).unwrap();
+        assert_eq!(recovered.get(&1), Some(&10));
+        assert_eq!(recovered.get(&2), None);
+        assert_eq!(recovered.log().seq_no, 1);
+        assert!(config.log_location.join("db.1.log").is_file());
+
+        let reopened = Map::init(&config).unwrap();
+        assert_eq!(reopened.get(&1), Some(&10));
+        assert_eq!(reopened.get(&2), None);
     }
 
     #[test]

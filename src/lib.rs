@@ -110,7 +110,26 @@ pub trait View {
             }
 
             // The database-wide lock stays held while switching logs.
-            self.log_mut().follow_snapshot()?;
+            self.log_mut().poisoned = true;
+            let path = match self.log().find_next()? {
+                Some(path) => path,
+                None => {
+                    let seq_no = self.log().seq_no;
+                    // Recovery must not publish uncommitted edits from an abandoned transaction.
+                    if !self.take_pending(seq_no).is_empty() {
+                        return Err(Error::Poisoned);
+                    }
+                    let payload = self.generate_snapshot()?;
+                    let path = self
+                        .log()
+                        .prepare_snapshot(seq_no, &payload)?
+                        .ok_or(Error::MissingSnapshotLog)?;
+                    self.log().publish_snapshot(&path)?;
+                    path
+                }
+            };
+            self.log_mut().switch_to(path)?;
+            self.log_mut().poisoned = false;
         }
     }
 
@@ -145,11 +164,13 @@ pub trait View {
 
         let log = self.log_mut();
         log.poisoned = true;
-        let Some(path) = log.create_snapshot(log.seq_no, &payload)? else {
+        let Some(path) = log.prepare_snapshot(log.seq_no, &payload)? else {
             log.poisoned = false;
             return tx.end_tx(self).map(|_| ());
         };
+        // Stop writes to the old log before publishing the new snapshot.
         log.append(LogEntry::Snapshot)?;
+        log.publish_snapshot(&path)?;
         log.switch_to(path)?;
         log.poisoned = false;
 
