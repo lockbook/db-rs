@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     config::Config,
     errors::{Error, Result},
+    guard::Lock,
     payload_buffer::PayloadBuffer,
 };
 
@@ -42,7 +43,7 @@ pub struct Notification {
 }
 
 pub struct Log {
-    file: File,
+    file: Option<File>,
     path: PathBuf,
     directory: PathBuf,
     pub(crate) seq_no: u64,
@@ -57,23 +58,27 @@ impl Log {
         } else {
             config.log_location.clone()
         };
-        let candidate = Self::find_latest(config)?;
-        let create = candidate.is_none();
-        let path = candidate.unwrap_or_else(|| directory.join("db.0.log"));
-        let file = OpenOptions::new()
-            .read(true)
-            .append(true)
-            .create(create)
-            .open(&path)?;
-
-        Ok(Self {
-            file,
-            path,
+        let mut log = Self {
+            file: None,
+            path: PathBuf::new(),
             directory,
             seq_no: 0,
             poisoned: false,
             notifications: None,
-        })
+        };
+        if !config.in_memory {
+            let candidate = Self::find_latest(config)?;
+            let create = candidate.is_none();
+            let path = candidate.unwrap_or_else(|| log.directory.join("db.0.log"));
+            let file = OpenOptions::new()
+                .read(true)
+                .append(true)
+                .create(create)
+                .open(&path)?;
+            log.file = Some(file);
+            log.path = path;
+        }
+        Ok(log)
     }
 
     pub fn notifications(&mut self) -> Receiver<Notification> {
@@ -92,6 +97,9 @@ impl Log {
     }
 
     pub fn find_latest(config: &Config) -> io::Result<Option<PathBuf>> {
+        if config.in_memory {
+            return Ok(None);
+        }
         let directory = if config.log_location.is_empty() {
             Path::new(".")
         } else {
@@ -153,26 +161,29 @@ impl Log {
         Ok(next.map(|(_, entry)| entry.path()))
     }
 
-    pub(crate) fn follow_snapshot(&mut self, lock: File) -> Result<File> {
+    pub(crate) fn follow_snapshot(&mut self, lock: Lock) -> Result<Lock> {
         let path = self.find_next()?.ok_or(Error::MissingSnapshotLog)?;
         let new_lock = OpenOptions::new().read(true).write(true).open(&path)?;
         new_lock.lock()?;
         let file = OpenOptions::new().read(true).append(true).open(&path)?;
         lock.unlock()?;
-        self.file = file;
+        self.file = Some(file);
         self.path = path;
-        Ok(new_lock)
+        Ok(Lock(Some(new_lock)))
     }
 
     pub(crate) fn switch_to(&mut self, path: PathBuf) -> io::Result<()> {
         let file = OpenOptions::new().read(true).append(true).open(&path)?;
-        self.file = file;
+        self.file = Some(file);
         self.path = path;
         Ok(())
     }
 
     pub(crate) fn append(&mut self, entry: LogEntry<'_>) -> Result<()> {
-        Self::append_to(&mut self.file, entry)
+        if let Some(file) = &mut self.file {
+            Self::append_to(file, entry)?;
+        }
+        Ok(())
     }
 
     fn append_to(file: &mut File, entry: LogEntry<'_>) -> Result<()> {
@@ -184,6 +195,9 @@ impl Log {
     }
 
     pub(crate) fn create_snapshot(&self, seq_no: u64, payload: &[u8]) -> Result<Option<PathBuf>> {
+        if self.file.is_none() {
+            return Ok(None);
+        }
         let path = self.directory.join(format!("db.{seq_no}.log"));
         if path == self.path {
             return Ok(None);
@@ -205,20 +219,28 @@ impl Log {
 
     pub fn get_bytes(&mut self) -> io::Result<Vec<u8>> {
         let mut bytes = Vec::new();
-        self.file.read_to_end(&mut bytes)?;
+        if let Some(file) = &mut self.file {
+            file.read_to_end(&mut bytes)?;
+        }
         Ok(bytes)
     }
 
-    pub(crate) fn read_lock(&self) -> io::Result<File> {
+    pub(crate) fn read_lock(&self) -> io::Result<Lock> {
+        if self.file.is_none() {
+            return Ok(Lock(None));
+        }
         let file = OpenOptions::new().read(true).open(&self.path)?;
         file.lock_shared()?;
-        Ok(file)
+        Ok(Lock(Some(file)))
     }
 
-    pub(crate) fn write_lock(&self) -> io::Result<File> {
+    pub(crate) fn write_lock(&self) -> io::Result<Lock> {
+        if self.file.is_none() {
+            return Ok(Lock(None));
+        }
         let file = OpenOptions::new().read(true).write(true).open(&self.path)?;
         file.lock()?;
-        Ok(file)
+        Ok(Lock(Some(file)))
     }
 }
 

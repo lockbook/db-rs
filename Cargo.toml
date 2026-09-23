@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 bincode = { version = "2.0.1", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+wasm-bindgen-test = "=0.3.58"

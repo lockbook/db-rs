@@ -5,11 +5,9 @@ pub mod log;
 pub mod payload_buffer;
 pub mod views;
 
-use std::fs::File;
-
 use config::Config;
 use errors::{Error, Result};
-use guard::{ReadTx, WriteTx};
+use guard::{Lock, ReadTx, WriteTx};
 use log::{Log, LogEntry, head_entry};
 
 pub trait View {
@@ -23,7 +21,7 @@ pub trait View {
     fn take_pending(&mut self, seq_no: u64) -> Vec<u8>;
     fn generate_snapshot(&mut self) -> Result<Vec<u8>>;
 
-    /// Restores a view with its active log.
+    /// Restores a persistent view, or creates an empty in-memory view.
     fn init(config: &Config) -> Result<Self>
     where
         Self: Default,
@@ -71,7 +69,7 @@ pub trait View {
         Ok(WriteTx { seq_no, lock })
     }
 
-    fn catch_up(&mut self, mut lock: File) -> Result<File> {
+    fn catch_up(&mut self, mut lock: Lock) -> Result<Lock> {
         let initial_seq_no = self.log().seq_no;
         loop {
             let bytes = self.log_mut().get_bytes()?;

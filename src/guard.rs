@@ -1,10 +1,21 @@
-use std::{fs::File, ops::Deref};
+use std::{fs::File, io, ops::Deref};
 
 use crate::{View, errors::Result};
 
+pub struct Lock(pub(crate) Option<File>);
+
+impl Lock {
+    pub fn unlock(&self) -> io::Result<()> {
+        if let Some(file) = &self.0 {
+            file.unlock()?;
+        }
+        Ok(())
+    }
+}
+
 pub struct ReadTx<'a, V: ?Sized> {
     pub(crate) view: &'a V,
-    pub(crate) lock: File,
+    pub(crate) lock: Lock,
 }
 
 impl<V: ?Sized> Deref for ReadTx<'_, V> {
@@ -26,7 +37,7 @@ impl<V: ?Sized> Drop for ReadTx<'_, V> {
 #[must_use = "call end_tx(&mut view) to flush pending changes before releasing the lock"]
 pub struct WriteTx {
     pub seq_no: u64,
-    pub(crate) lock: File,
+    pub(crate) lock: Lock,
 }
 
 impl WriteTx {
