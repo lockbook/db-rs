@@ -69,7 +69,7 @@ pub trait View {
         Ok(WriteTx { seq_no, lock })
     }
 
-    fn catch_up(&mut self, mut lock: Lock) -> Result<Lock> {
+    fn catch_up(&mut self, lock: Lock) -> Result<Lock> {
         let initial_seq_no = self.log().seq_no;
         loop {
             let bytes = self.log_mut().get_bytes()?;
@@ -109,7 +109,8 @@ pub trait View {
                 return Ok(lock);
             }
 
-            lock = self.log_mut().follow_snapshot(lock)?;
+            // The database-wide lock stays held while switching logs.
+            self.log_mut().follow_snapshot()?;
         }
     }
 

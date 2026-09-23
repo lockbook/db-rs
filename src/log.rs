@@ -161,15 +161,10 @@ impl Log {
         Ok(next.map(|(_, entry)| entry.path()))
     }
 
-    pub(crate) fn follow_snapshot(&mut self, lock: Lock) -> Result<Lock> {
+    pub(crate) fn follow_snapshot(&mut self) -> Result<()> {
         let path = self.find_next()?.ok_or(Error::MissingSnapshotLog)?;
-        let new_lock = OpenOptions::new().read(true).write(true).open(&path)?;
-        new_lock.lock()?;
-        let file = OpenOptions::new().read(true).append(true).open(&path)?;
-        lock.unlock()?;
-        self.file = Some(file);
-        self.path = path;
-        Ok(Lock(Some(new_lock)))
+        self.switch_to(path)?;
+        Ok(())
     }
 
     pub(crate) fn switch_to(&mut self, path: PathBuf) -> io::Result<()> {
@@ -229,7 +224,12 @@ impl Log {
         if self.file.is_none() {
             return Ok(Lock(None));
         }
-        let file = OpenOptions::new().read(true).open(&self.path)?;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(self.directory.join("db.lock"))?;
         file.lock_shared()?;
         Ok(Lock(Some(file)))
     }
@@ -238,7 +238,12 @@ impl Log {
         if self.file.is_none() {
             return Ok(Lock(None));
         }
-        let file = OpenOptions::new().read(true).write(true).open(&self.path)?;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(self.directory.join("db.lock"))?;
         file.lock()?;
         Ok(Lock(Some(file)))
     }
@@ -281,6 +286,8 @@ mod tests {
         data.try_lock().unwrap();
         data.unlock().unwrap();
         lock.unlock().unwrap();
+        database_lock.try_lock_shared().unwrap();
+        assert!(config.log_location.join("db.lock").is_file());
     }
 
     #[test]
@@ -289,6 +296,7 @@ mod tests {
         let events: [(u64, &[u8]); 3] = [(1, b"one"), (2, b"two"), (3, b"three")];
 
         let mut log = Log::init(&config).unwrap();
+        let lock = log.write_lock().unwrap();
         for (seq_no, payload) in events {
             log.append(LogEntry::Events { seq_no, payload }).unwrap();
         }
@@ -306,6 +314,7 @@ mod tests {
             assert_eq!(payload, expected_payload);
         }
         assert!(head_entry(&mut remaining).unwrap().is_none());
+        lock.unlock().unwrap();
     }
 
     #[test]

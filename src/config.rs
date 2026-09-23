@@ -7,6 +7,9 @@ use std::{
 
 #[derive(Default)]
 pub struct Config {
+    /// Persistent databases coordinate transactions through `db.lock` in this directory.
+    /// Do not delete or replace that file while any database instance is open.
+    /// Do not mix with older clients that lock individual log files.
     pub log_location: PathBuf,
     /// Keeps data only in the view, without filesystem access or IPC; ignores `log_location`.
     pub in_memory: bool,

@@ -1,6 +1,26 @@
-use std::fs;
+use std::fs::{self, OpenOptions, TryLockError};
 
 use db_rs::{View, config::Config, views::hashmap::DbHashMap};
+
+#[test]
+fn read_transactions_release_their_locks_independently() {
+    let config = Config::test();
+    let db = DbHashMap::<String, u64>::init(&config).unwrap();
+    let first = db.read_tx().unwrap();
+    let second = db.read_tx().unwrap();
+    let writer = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(config.log_location.join("db.lock"))
+        .unwrap();
+
+    drop(first);
+    assert!(matches!(writer.try_lock(), Err(TryLockError::WouldBlock)));
+
+    drop(second);
+    writer.try_lock().unwrap();
+    writer.unlock().unwrap();
+}
 
 #[test]
 fn write_transaction_sequence() {
