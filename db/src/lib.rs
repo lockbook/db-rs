@@ -117,6 +117,7 @@ pub mod compacter;
 pub mod config;
 pub mod db;
 pub mod errors;
+pub mod hasher;
 pub mod list;
 pub mod logger;
 pub mod lookup;
