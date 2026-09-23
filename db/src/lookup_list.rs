@@ -8,7 +8,7 @@ use std::hash::{BuildHasher, Hash, RandomState};
 /// A special case of [crate::lookup::LookupTable] where the value of the [HashMap] is a `Vec<V>`.
 #[derive(Debug)]
 #[cfg_attr(feature = "clone", derive(Clone))]
-pub struct LookupList<K, V, S=RandomState>
+pub struct LookupList<K, V, S = RandomState>
 where
     K: Hash + Eq + Serialize,
     V: Serialize + Eq,
@@ -31,7 +31,7 @@ impl<K, V, S> Table for LookupList<K, V, S>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned + Eq + Hash,
-    S: Default + BuildHasher
+    S: Default + BuildHasher,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
         let inner = HashMap::with_hasher(S::default());
@@ -86,7 +86,7 @@ impl<K, V, S> LookupList<K, V, S>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned + Eq + Hash,
-    S: BuildHasher
+    S: BuildHasher,
 {
     pub(crate) fn push_inner(&mut self, k: K, v: V) {
         if let Some(vec) = self.inner.get_mut(&k) {

@@ -10,11 +10,11 @@ use std::hash::{BuildHasher, Hash, RandomState};
 /// A table backed by a [HashMap] of type `K`, `V`
 #[derive(Debug)]
 #[cfg_attr(feature = "clone", derive(Clone))]
-pub struct LookupTable<K, V, S=RandomState>
+pub struct LookupTable<K, V, S = RandomState>
 where
     K: Hash + Eq + Serialize,
     V: Serialize,
-    S: BuildHasher + Default
+    S: BuildHasher + Default,
 {
     table_id: TableId,
     inner: HashMap<K, V, S>,
@@ -32,7 +32,7 @@ impl<K, V, S> Table for LookupTable<K, V, S>
 where
     K: Hash + Eq + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
-    S: BuildHasher + Default
+    S: BuildHasher + Default,
 {
     fn init(table_id: TableId, logger: Logger) -> Self {
         Self { table_id, inner: HashMap::with_hasher(S::default()), logger }
@@ -70,7 +70,7 @@ impl<K, V, S> LookupTable<K, V, S>
 where
     K: Hash + Eq + Serialize,
     V: Serialize,
-    S: BuildHasher + Default
+    S: BuildHasher + Default,
 {
     pub fn insert(&mut self, key: K, value: V) -> DbResult<Option<V>> {
         let log_entry = LogEntry::Insert(&key, &value);

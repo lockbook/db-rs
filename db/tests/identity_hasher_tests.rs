@@ -99,10 +99,7 @@ fn lookup_list_with_identity_hasher() {
     drop(db);
 
     let db = UuidLookupSchema::init(Config::in_folder(dir)).unwrap();
-    assert_eq!(
-        db.list.get().get(&id1).unwrap(),
-        &vec!["a".to_string(), "b".to_string()]
-    );
+    assert_eq!(db.list.get().get(&id1).unwrap(), &vec!["a".to_string(), "b".to_string()]);
     assert_eq!(db.list.get().get(&id2).unwrap(), &vec!["c".to_string()]);
 
     drop(fs::remove_dir_all(dir));
