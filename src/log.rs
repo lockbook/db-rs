@@ -45,7 +45,7 @@ pub struct Notification {
 pub struct Log {
     file: Option<File>,
     path: PathBuf,
-    directory: PathBuf,
+    pub directory: PathBuf,
     pub(crate) seq_no: u64,
     pub(crate) poisoned: bool,
     notifications: Option<Sender<Notification>>,
