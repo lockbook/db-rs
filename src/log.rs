@@ -53,7 +53,7 @@ pub struct Log {
 
 impl Log {
     pub fn init(config: &Config) -> io::Result<Self> {
-        let directory = if config.log_location.is_empty() {
+        let directory = if config.log_location.as_os_str().is_empty() {
             PathBuf::from(".")
         } else {
             config.log_location.clone()
@@ -100,7 +100,7 @@ impl Log {
         if config.in_memory {
             return Ok(None);
         }
-        let directory = if config.log_location.is_empty() {
+        let directory = if config.log_location.as_os_str().is_empty() {
             Path::new(".")
         } else {
             &config.log_location
