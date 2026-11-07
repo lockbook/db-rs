@@ -84,7 +84,16 @@ pub trait View {
             let mut remaining = bytes.as_slice();
             let mut snapshot = false;
 
-            while let Some(entry) = head_entry(&mut remaining)? {
+            loop {
+                let entry = match head_entry(&mut remaining) {
+                    Ok(Some(entry)) => entry,
+                    Ok(None) => break,
+                    Err(Error::IncompleteLog { .. }) => {
+                        self.log_mut().discard_incomplete(remaining.len())?;
+                        break;
+                    }
+                    Err(error) => return Err(error),
+                };
                 match entry {
                     LogEntry::Events {
                         seq_no: entry_seq_no,

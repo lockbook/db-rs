@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Read, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, Sender},
 };
@@ -48,6 +48,7 @@ pub struct Log {
     pub directory: PathBuf,
     pub(crate) seq_no: u64,
     pub(crate) poisoned: bool,
+    incomplete_write: Option<usize>,
     notifications: Option<Sender<Notification>>,
 }
 
@@ -64,6 +65,7 @@ impl Log {
             directory,
             seq_no: 0,
             poisoned: false,
+            incomplete_write: None,
             notifications: None,
         };
         if !config.in_memory {
@@ -85,6 +87,10 @@ impl Log {
         let (sender, receiver) = mpsc::channel();
         self.notifications = Some(sender);
         receiver
+    }
+
+    pub fn take_incomplete_write(&mut self) -> Option<usize> {
+        self.incomplete_write.take()
     }
 
     pub(crate) fn notify(&self, local: bool) {
@@ -214,6 +220,19 @@ impl Log {
             file.read_to_end(&mut bytes)?;
         }
         Ok(bytes)
+    }
+
+    pub(crate) fn discard_incomplete(&mut self, len: usize) -> io::Result<()> {
+        let Some(file) = &mut self.file else {
+            return Ok(());
+        };
+        let complete = file.stream_position()? - len as u64;
+        let writer = OpenOptions::new().write(true).open(&self.path)?;
+        writer.set_len(complete)?;
+        writer.sync_all()?;
+        file.seek(SeekFrom::Start(complete))?;
+        *self.incomplete_write.get_or_insert(0) += len;
+        Ok(())
     }
 
     pub(crate) fn read_lock(&self) -> io::Result<Lock> {
