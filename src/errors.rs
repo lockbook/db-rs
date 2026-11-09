@@ -3,6 +3,7 @@ use std::{error, fmt, io};
 #[derive(Debug)]
 pub enum Error {
     Poisoned,
+    ReadOnly,
     MissingSnapshotLog,
     SequenceExhausted,
     UnknownTable { table_id: usize },
@@ -22,6 +23,7 @@ impl fmt::Display for Error {
                 formatter,
                 "transaction failed or was left unfinished; reopen the database before continuing"
             ),
+            Self::ReadOnly => write!(formatter, "database was opened read-only"),
             Self::MissingSnapshotLog => write!(formatter, "snapshot log is missing"),
             Self::SequenceExhausted => write!(formatter, "transaction sequence number exhausted"),
             Self::UnknownTable { table_id } => write!(formatter, "unknown table ID: {table_id}"),
@@ -59,6 +61,7 @@ impl error::Error for Error {
             Self::IncompleteLog { .. }
             | Self::TrailingBytes { .. }
             | Self::Poisoned
+            | Self::ReadOnly
             | Self::MissingSnapshotLog
             | Self::UnknownTable { .. }
             | Self::IndexOutOfBounds { .. }
