@@ -50,6 +50,9 @@ pub trait View {
     where
         Self: Sized,
     {
+        if self.log().read_only {
+            return Err(Error::ReadOnly);
+        }
         if self.log().poisoned {
             return Err(Error::Poisoned);
         }
@@ -131,6 +134,9 @@ pub trait View {
             let path = match self.log().find_next()? {
                 Some(path) => path,
                 None => {
+                    if self.log().read_only {
+                        return Err(Error::MissingSnapshotLog);
+                    }
                     let seq_no = self.log().seq_no;
                     // Recovery must not publish uncommitted edits from an abandoned transaction.
                     if !self.take_pending(seq_no).is_empty() {

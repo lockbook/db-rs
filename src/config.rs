@@ -13,6 +13,7 @@ pub struct Config {
     pub log_location: PathBuf,
     /// Keeps data only in the view, without filesystem access or IPC; ignores `log_location`.
     pub in_memory: bool,
+    pub read_only: bool,
 }
 
 impl Config {
@@ -27,6 +28,11 @@ impl Config {
 
     pub fn log_location(mut self, location: impl Into<PathBuf>) -> Self {
         self.log_location = location.into();
+        self
+    }
+
+    pub fn read_only(mut self) -> Self {
+        self.read_only = true;
         self
     }
 

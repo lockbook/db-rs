@@ -48,6 +48,7 @@ pub struct Log {
     pub directory: PathBuf,
     pub(crate) seq_no: u64,
     pub(crate) poisoned: bool,
+    pub(crate) read_only: bool,
     incomplete_write: Option<usize>,
     notifications: Option<Sender<Notification>>,
 }
@@ -65,6 +66,7 @@ impl Log {
             directory,
             seq_no: 0,
             poisoned: false,
+            read_only: config.read_only,
             incomplete_write: None,
             notifications: None,
         };
@@ -72,15 +74,21 @@ impl Log {
             let candidate = Self::find_latest(config)?;
             let create = candidate.is_none();
             let path = candidate.unwrap_or_else(|| log.directory.join("db.0.log"));
-            let file = OpenOptions::new()
-                .read(true)
-                .append(true)
-                .create(create)
-                .open(&path)?;
-            log.file = Some(file);
+            log.file = Some(log.open(&path, create)?);
             log.path = path;
         }
         Ok(log)
+    }
+
+    fn open(&self, path: &Path, create: bool) -> io::Result<File> {
+        if self.read_only {
+            return File::open(path);
+        }
+        OpenOptions::new()
+            .read(true)
+            .append(true)
+            .create(create)
+            .open(path)
     }
 
     pub fn notifications(&mut self) -> Receiver<Notification> {
@@ -168,7 +176,7 @@ impl Log {
     }
 
     pub(crate) fn switch_to(&mut self, path: PathBuf) -> io::Result<()> {
-        let file = OpenOptions::new().read(true).append(true).open(&path)?;
+        let file = self.open(&path, false)?;
         self.file = Some(file);
         self.path = path;
         Ok(())
@@ -227,6 +235,10 @@ impl Log {
             return Ok(());
         };
         let complete = file.stream_position()? - len as u64;
+        if self.read_only {
+            file.seek(SeekFrom::Start(complete))?;
+            return Ok(());
+        }
         let writer = OpenOptions::new().write(true).open(&self.path)?;
         writer.set_len(complete)?;
         writer.sync_all()?;
@@ -235,8 +247,12 @@ impl Log {
         Ok(())
     }
 
+    fn unlocked(&self) -> bool {
+        self.file.is_none() || self.read_only || cfg!(target_os = "ios")
+    }
+
     pub(crate) fn read_lock(&self) -> io::Result<Lock> {
-        if self.file.is_none() {
+        if self.unlocked() {
             return Ok(Lock(None));
         }
         let file = OpenOptions::new()
@@ -250,7 +266,7 @@ impl Log {
     }
 
     pub(crate) fn write_lock(&self) -> io::Result<Lock> {
-        if self.file.is_none() {
+        if self.unlocked() {
             return Ok(Lock(None));
         }
         let file = OpenOptions::new()
@@ -371,6 +387,34 @@ mod tests {
         let reopened = Map::init(&config).unwrap();
         assert_eq!(reopened.get(&1), Some(&10));
         assert_eq!(reopened.get(&2), None);
+    }
+
+    #[test]
+    fn read_only_leaves_a_missing_snapshot_unpublished() {
+        use crate::{View, errors::Error, views::hashmap::DbHashMap};
+
+        type Map = DbHashMap<u64, u64>;
+
+        let config = Config::test();
+        let mut db = Map::init(&config).unwrap();
+        let tx = db.write_tx().unwrap();
+        db.insert(1, 10).unwrap();
+        tx.end_tx(&mut db).unwrap();
+
+        let tx = db.write_tx().unwrap();
+        db.log_mut().append(LogEntry::Snapshot).unwrap();
+        tx.end_tx(&mut db).unwrap();
+        drop(db);
+
+        let read_only = Config::default()
+            .log_location(config.log_location.clone())
+            .read_only();
+        assert!(matches!(
+            Map::init(&read_only),
+            Err(Error::MissingSnapshotLog)
+        ));
+        assert!(!config.log_location.join("db.1.log").exists());
+        assert!(!config.log_location.join("db.1.tmp").exists());
     }
 
     #[test]
