@@ -31,22 +31,25 @@ fn composite_tracks_only_changed_children_and_preserves_their_sequences() {
     let tx = db.write_tx().unwrap();
     db.schema.inner.schema.metadata.insert(1, 2).unwrap();
     assert_eq!(revisions(&db), (0, 0, 0, 0, 0));
-    tx.end_tx(&mut db).unwrap();
-    assert_eq!(revisions(&db), (1, 1, 1, 0, 0));
+    let first = tx.end_tx(&mut db).unwrap();
+    assert!(first > 0);
+    assert_eq!(revisions(&db), (first, first, first, 0, 0));
 
     let tx = db.write_tx().unwrap();
     db.schema.unrelated.replace(42).unwrap();
-    tx.end_tx(&mut db).unwrap();
-    assert_eq!(revisions(&db), (2, 1, 1, 0, 2));
+    let second = tx.end_tx(&mut db).unwrap();
+    assert!(second > first);
+    assert_eq!(revisions(&db), (second, first, first, 0, second));
     db.snapshot().unwrap();
     let reopened = Composite::<Outer>::init(&config).unwrap();
-    assert_eq!(revisions(&reopened), (2, 1, 1, 0, 2));
+    assert_eq!(revisions(&reopened), (second, first, first, 0, second));
 
     let tx = db.write_tx().unwrap();
     db.schema.inner.schema.metadata.clear().unwrap();
-    tx.end_tx(&mut db).unwrap();
+    let third = tx.end_tx(&mut db).unwrap();
+    assert!(third > second);
     db.snapshot().unwrap();
-    assert_eq!(revisions(&db), (3, 3, 3, 0, 2));
+    assert_eq!(revisions(&db), (third, third, third, 0, second));
 
     reader.write_tx().unwrap().end_tx(&mut reader).unwrap();
     assert_eq!(revisions(&reader), revisions(&db));
@@ -67,24 +70,26 @@ fn check<V: View + Default>(
     let tx = db.write_tx().unwrap();
     edit(&mut db).unwrap();
     assert_eq!(db.last_modified(), 0);
-    tx.end_tx(&mut db).unwrap();
-    assert_eq!(db.last_modified(), 1);
+    let first = tx.end_tx(&mut db).unwrap();
+    assert!(first > 0);
+    assert_eq!(db.last_modified(), first);
 
     db.write_tx().unwrap().end_tx(&mut db).unwrap();
-    assert_eq!(db.last_modified(), 1);
+    assert_eq!(db.last_modified(), first);
     reader.write_tx().unwrap().end_tx(&mut reader).unwrap();
-    assert_eq!(reader.last_modified(), 1);
+    assert_eq!(reader.last_modified(), first);
 
     let tx = db.write_tx().unwrap();
     clear(&mut db).unwrap();
-    tx.end_tx(&mut db).unwrap();
-    assert_eq!(db.last_modified(), 2);
+    let second = tx.end_tx(&mut db).unwrap();
+    assert!(second > first);
+    assert_eq!(db.last_modified(), second);
     db.snapshot().unwrap();
-    assert_eq!(db.last_modified(), 2);
+    assert_eq!(db.last_modified(), second);
     let reopened = V::init(&config).unwrap();
-    assert_eq!(reopened.last_modified(), 2);
+    assert_eq!(reopened.last_modified(), second);
     reader.write_tx().unwrap().end_tx(&mut reader).unwrap();
-    assert_eq!(reader.last_modified(), 2);
+    assert_eq!(reader.last_modified(), second);
 }
 
 #[derive(Default)]

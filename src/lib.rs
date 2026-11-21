@@ -72,11 +72,7 @@ pub trait View {
                 return Err(error);
             }
         };
-        let seq_no = self
-            .log()
-            .seq_no
-            .checked_add(1)
-            .ok_or(Error::SequenceExhausted)?;
+        let seq_no = self.log().next_seq_no()?;
         Ok(WriteTx { seq_no, lock })
     }
 

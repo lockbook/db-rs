@@ -1,3 +1,5 @@
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -34,6 +36,20 @@ pub(crate) fn head_entry<'a>(remaining: &mut &'a [u8]) -> Result<Option<LogEntry
     }
     *remaining = rest;
     Ok(Some(entry))
+}
+
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| u64::try_from(elapsed.as_millis()).ok())
+        .unwrap_or(0)
+}
+
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+fn now() -> u64 {
+    0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +115,11 @@ impl Log {
 
     pub fn take_incomplete_write(&mut self) -> Option<usize> {
         self.incomplete_write.take()
+    }
+
+    pub(crate) fn next_seq_no(&self) -> Result<u64> {
+        let next = self.seq_no.checked_add(1).ok_or(Error::SequenceExhausted)?;
+        Ok(next.max(now()))
     }
 
     pub(crate) fn notify(&self, local: bool) {
@@ -364,7 +385,8 @@ mod tests {
 
         let tx = committed.write_tx().unwrap();
         committed.insert(1, 10).unwrap();
-        tx.end_tx(&mut committed).unwrap();
+        let seq_no = tx.end_tx(&mut committed).unwrap();
+        let snapshot = config.log_location.join(format!("db.{seq_no}.log"));
 
         // Leave a snapshot marker with neither a published nor a temporary snapshot.
         let tx = committed.write_tx().unwrap();
@@ -374,15 +396,15 @@ mod tests {
 
         assert!(matches!(dirty.write_tx(), Err(Error::Poisoned)));
         assert!(matches!(dirty.write_tx(), Err(Error::Poisoned)));
-        assert!(!config.log_location.join("db.1.log").exists());
-        assert!(!config.log_location.join("db.1.tmp").exists());
+        assert!(!snapshot.exists());
+        assert!(!snapshot.with_extension("tmp").exists());
 
         // A fresh view can recover using only the committed log history.
         let recovered = Map::init(&config).unwrap();
         assert_eq!(recovered.get(&1), Some(&10));
         assert_eq!(recovered.get(&2), None);
-        assert_eq!(recovered.log().seq_no, 1);
-        assert!(config.log_location.join("db.1.log").is_file());
+        assert_eq!(recovered.log().seq_no, seq_no);
+        assert!(snapshot.is_file());
 
         let reopened = Map::init(&config).unwrap();
         assert_eq!(reopened.get(&1), Some(&10));
@@ -399,7 +421,8 @@ mod tests {
         let mut db = Map::init(&config).unwrap();
         let tx = db.write_tx().unwrap();
         db.insert(1, 10).unwrap();
-        tx.end_tx(&mut db).unwrap();
+        let seq_no = tx.end_tx(&mut db).unwrap();
+        let snapshot = config.log_location.join(format!("db.{seq_no}.log"));
 
         let tx = db.write_tx().unwrap();
         db.log_mut().append(LogEntry::Snapshot).unwrap();
@@ -413,8 +436,8 @@ mod tests {
             Map::init(&read_only),
             Err(Error::MissingSnapshotLog)
         ));
-        assert!(!config.log_location.join("db.1.log").exists());
-        assert!(!config.log_location.join("db.1.tmp").exists());
+        assert!(!snapshot.exists());
+        assert!(!snapshot.with_extension("tmp").exists());
     }
 
     #[test]

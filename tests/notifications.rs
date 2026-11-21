@@ -10,14 +10,16 @@ fn notifies_local_writes_and_catch_up_across_snapshots() {
     let writes = writer.log_mut().notifications();
     let replays = reader.log_mut().notifications();
 
-    for seq_no in 1..=2 {
+    let mut committed = Vec::new();
+    for value in 1..=2 {
         let tx = writer.write_tx().unwrap();
-        writer.insert("key".into(), seq_no).unwrap();
-        tx.end_tx(&mut writer).unwrap();
+        writer.insert("key".into(), value).unwrap();
+        committed.push(tx.end_tx(&mut writer).unwrap());
         writer.snapshot().unwrap();
     }
+    assert!(committed[1] > committed[0]);
 
-    for seq_no in 1..=2 {
+    for seq_no in committed.iter().copied() {
         assert_eq!(
             writes.try_recv().unwrap(),
             Notification {
@@ -34,7 +36,7 @@ fn notifies_local_writes_and_catch_up_across_snapshots() {
         replays.try_recv().unwrap(),
         Notification {
             local: false,
-            seq_no: 2
+            seq_no: committed[1]
         }
     );
     assert_eq!(reader.get("key"), Some(&2));
@@ -44,12 +46,13 @@ fn notifies_local_writes_and_catch_up_across_snapshots() {
 
     let tx = reader.write_tx().unwrap();
     reader.insert("key".into(), 3).unwrap();
-    tx.end_tx(&mut reader).unwrap();
+    let seq_no = tx.end_tx(&mut reader).unwrap();
+    assert!(seq_no > committed[1]);
     assert_eq!(
         replays.try_recv().unwrap(),
         Notification {
             local: true,
-            seq_no: 3
+            seq_no
         }
     );
 }
@@ -61,6 +64,7 @@ fn disconnected_receiver_does_not_prevent_writes() {
     drop(db.log_mut().notifications());
     let tx = db.write_tx().unwrap();
     db.insert("key".into(), 1).unwrap();
-    tx.end_tx(&mut db).unwrap();
-    assert_eq!(db.last_modified(), 1);
+    let seq_no = tx.end_tx(&mut db).unwrap();
+    assert!(seq_no > 0);
+    assert_eq!(db.last_modified(), seq_no);
 }

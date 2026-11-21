@@ -28,32 +28,35 @@ fn transactions_and_notifications() {
     assert_eq!(notifications.try_recv(), Err(TryRecvError::Empty));
 
     let tx = db.write_tx().unwrap();
-    assert_eq!(tx.seq_no, 1);
+    let first = tx.seq_no;
+    assert!(first > 0);
     db.insert("key".into(), 42).unwrap();
-    assert_eq!(tx.end_tx(&mut db).unwrap(), 1);
-    assert_eq!(db.last_modified(), 1);
+    assert_eq!(tx.end_tx(&mut db).unwrap(), first);
+    assert_eq!(db.last_modified(), first);
     assert_eq!(db.read_tx().unwrap().get("key"), Some(&42));
     assert_eq!(
         notifications.try_recv().unwrap(),
         Notification {
             local: true,
-            seq_no: 1
+            seq_no: first
         }
     );
 
     db.snapshot().unwrap();
-    assert_eq!(db.last_modified(), 1);
+    assert_eq!(db.last_modified(), first);
     assert_eq!(notifications.try_recv(), Err(TryRecvError::Empty));
 
     let tx = db.write_tx().unwrap();
+    let second = tx.seq_no;
+    assert!(second > first);
     db.insert("key".into(), 43).unwrap();
-    assert_eq!(tx.end_tx(&mut db).unwrap(), 2);
+    assert_eq!(tx.end_tx(&mut db).unwrap(), second);
     assert_eq!(db.read_tx().unwrap().get("key"), Some(&43));
     assert_eq!(
         notifications.try_recv().unwrap(),
         Notification {
             local: true,
-            seq_no: 2
+            seq_no: second
         }
     );
 }
@@ -110,8 +113,10 @@ fn dropping_empty_write_is_harmless() {
     drop(db.write_tx().unwrap());
 
     let tx = db.write_tx().unwrap();
+    let seq_no = tx.seq_no;
+    assert!(seq_no > 0);
     db.insert(1, 42).unwrap();
-    assert_eq!(tx.end_tx(&mut db).unwrap(), 1);
+    assert_eq!(tx.end_tx(&mut db).unwrap(), seq_no);
     assert_eq!(db.read_tx().unwrap().get(&1), Some(&42));
 }
 
@@ -162,10 +167,11 @@ fn composite_snapshot_round_trip() {
     db.schema.vec.push(4).unwrap();
     db.schema.sets.insert(5, 6).unwrap();
     db.schema.maps.insert(7, 8, 9).unwrap();
-    tx.end_tx(&mut db).unwrap();
+    let first = tx.end_tx(&mut db).unwrap();
     let tx = db.write_tx().unwrap();
     db.schema.option.replace(10).unwrap();
-    tx.end_tx(&mut db).unwrap();
+    let second = tx.end_tx(&mut db).unwrap();
+    assert!(second > first);
 
     let bytes = db.generate_snapshot().unwrap();
     let mut restored = Composite::<TestSchema>::init(&config).unwrap();
@@ -176,6 +182,6 @@ fn composite_snapshot_round_trip() {
     assert_eq!(read.schema.vec.as_slice(), [4]);
     assert!(read.schema.sets.get(&5).unwrap().contains(&6));
     assert_eq!(read.schema.maps.get(&7).unwrap().get(&8), Some(&9));
-    assert_eq!(read.schema.map.last_modified(), 1);
-    assert_eq!(read.schema.option.last_modified(), 2);
+    assert_eq!(read.schema.map.last_modified(), first);
+    assert_eq!(read.schema.option.last_modified(), second);
 }
