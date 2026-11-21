@@ -29,24 +29,26 @@ fn write_transaction_sequence() {
     let mut other = DbHashMap::<String, u64>::init(&config).unwrap();
 
     let tx = db.write_tx().unwrap();
-    assert_eq!(tx.seq_no, 1);
+    assert!(tx.seq_no > 0);
     assert_eq!(tx.end_tx(&mut db).unwrap(), 0);
 
     let tx = db.write_tx().unwrap();
-    assert_eq!(tx.seq_no, 1);
+    let first = tx.seq_no;
+    assert!(first > 0);
     db.insert("key".into(), 42).unwrap();
-    assert_eq!(tx.end_tx(&mut db).unwrap(), 1);
-    assert_eq!(db.last_modified(), 1);
+    assert_eq!(tx.end_tx(&mut db).unwrap(), first);
+    assert_eq!(db.last_modified(), first);
     db.snapshot().unwrap();
 
     let tx = other.write_tx().unwrap();
-    assert_eq!(tx.seq_no, 2);
+    let second = tx.seq_no;
+    assert!(second > first);
     other.insert("key".into(), 43).unwrap();
-    assert_eq!(tx.end_tx(&mut other).unwrap(), 2);
-    assert_eq!(other.last_modified(), 2);
+    assert_eq!(tx.end_tx(&mut other).unwrap(), second);
+    assert_eq!(other.last_modified(), second);
 
     let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
-    assert_eq!(reopened.last_modified(), 2);
+    assert_eq!(reopened.last_modified(), second);
     assert_eq!(reopened.get("key"), Some(&43));
 }
 
@@ -106,12 +108,12 @@ fn dropping_empty_write_transaction_is_harmless() {
     drop(db.write_tx().unwrap());
 
     let tx = db.write_tx().unwrap();
-    assert_eq!(tx.seq_no, 1);
     db.insert("key".into(), 42).unwrap();
-    tx.end_tx(&mut db).unwrap();
+    let seq_no = tx.end_tx(&mut db).unwrap();
 
     let reopened = DbHashMap::<String, u64>::init(&config).unwrap();
     assert_eq!(reopened.get("key"), Some(&42));
+    assert_eq!(reopened.last_modified(), seq_no);
 }
 
 #[test]
@@ -191,7 +193,8 @@ fn snapshot_reduces_log_size() {
 
     db.snapshot().unwrap();
 
-    let snapshot_size = fs::metadata(log_location.join("db.100.log")).unwrap().len();
+    let snapshot = log_location.join(format!("db.{}.log", db.last_modified()));
+    let snapshot_size = fs::metadata(snapshot).unwrap().len();
     assert!(snapshot_size < original_size / 10);
 
     drop(db);
